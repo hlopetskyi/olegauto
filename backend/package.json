@@ -1,0 +1,30 @@
+{
+  "name": "olegauto-backend",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "medusa develop",
+    "build": "medusa build",
+    "start": "medusa start",
+    "seed": "medusa exec ./src/scripts/seed.ts",
+    "db:migrate": "medusa db:migrate"
+  },
+  "dependencies": {
+    "@medusajs/medusa": "2.8.3",
+    "@medusajs/framework": "2.8.3",
+    "@medusajs/admin-sdk": "2.8.3",
+    "@medusajs/file-local": "2.8.3",
+    "@medusajs/payment-manual": "2.8.3",
+    "@medusajs/fulfillment-manual": "2.8.3",
+    "@medusajs/notification-local": "2.8.3",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "@medusajs/test-utils": "2.8.3",
+    "@types/node": "^20",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

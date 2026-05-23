@@ -1,0 +1,25 @@
+[
+  {
+    "id": 1,
+    "customerName": "Хлопецький Руслан",
+    "customerPhone": "+380985590821",
+    "city": "Комарно",
+    "delivery": "pickup",
+    "comment": "",
+    "items": [
+      {
+        "id": 20,
+        "name": "Паливний насос Fiat Bravo 2007–2014",
+        "price": 1234,
+        "image": null,
+        "category": "Паливна система",
+        "qty": 1
+      }
+    ],
+    "subtotal": 1234,
+    "deliveryCost": 150,
+    "total": 1384,
+    "status": "new",
+    "createdAt": "2026-05-21T12:48:42.278Z"
+  }
+]
