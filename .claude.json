@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gitnexus": {
+      "command": "node",
+      "args": ["/Users/ruslanhlopeckij/Documents/olegauto/node_modules/.bin/gitnexus", "mcp"],
+      "type": "stdio"
+    }
+  }
+}
