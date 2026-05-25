@@ -52,9 +52,11 @@ function nextId(arr) {
 // ============ PRODUCTS API ============
 app.get('/api/products', (req, res) => {
   let products = readData('products.json');
-  const { brand, category, condition, inStock, search, sort } = req.query;
+  const { brand, category, condition, inStock, search, sort, carBrand, carModel } = req.query;
 
   if (brand) products = products.filter(p => p.brand === brand);
+  if (carBrand) products = products.filter(p => (p.carBrand || '').toLowerCase() === carBrand.toLowerCase());
+  if (carModel) products = products.filter(p => (p.carModel || '').toLowerCase() === carModel.toLowerCase());
   if (category) products = products.filter(p => p.category === category);
   if (condition && condition !== 'all') products = products.filter(p => p.condition === condition);
   if (inStock === 'true') products = products.filter(p => p.stock > 0);
