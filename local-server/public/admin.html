@@ -342,7 +342,7 @@
             </select>
           </div>
           <div class="form-field required">
-            <label>Ціна (грн)</label>
+            <label>Ціна (€)</label>
             <input type="number" id="fPrice" placeholder="3200" min="0" required>
           </div>
           <div class="form-field">
@@ -453,7 +453,7 @@ async function loadDashboard() {
     document.getElementById('s-new').textContent = stats.newProducts;
     document.getElementById('s-used').textContent = stats.usedProducts;
     document.getElementById('s-orders').textContent = stats.newOrders;
-    document.getElementById('s-revenue').textContent = stats.revenue.toLocaleString('uk-UA')+' ₴';
+    document.getElementById('s-revenue').textContent = stats.revenue.toLocaleString('de-DE')+' €';
   } catch(e){}
 
   try {
@@ -466,7 +466,7 @@ async function loadDashboard() {
         ${recent.map(o=>`<tr>
           <td><strong>#${o.id}</strong></td>
           <td>${o.customerName||'—'}</td>
-          <td>${(o.total||0).toLocaleString('uk-UA')} ₴</td>
+          <td>${(o.total||0).toLocaleString('de-DE')} €</td>
           <td><span class="badge ${getStatusCls(o.status)}">${getStatusLabel(o.status)}</span></td>
         </tr>`).join('')}
       </tbody></table>`;
@@ -548,7 +548,7 @@ function renderProductsTable() {
       <td><span class="badge badge-brand" style="background:rgba(0,35,149,.08);color:var(--blue)">${p.brand}</span></td>
       <td style="color:var(--gray-600);font-size:13px">${p.category}</td>
       <td><span class="badge ${COND_BADGE[p.condition]||'badge-new'}">${COND_LABELS[p.condition]||p.condition}</span></td>
-      <td style="font-weight:700;color:var(--orange)">${p.price.toLocaleString('uk-UA')} ₴</td>
+      <td style="font-weight:700;color:var(--orange)">${p.price.toLocaleString('de-DE')} €</td>
       <td><span class="${stockCls}">${stockTxt}</span></td>
       <td style="white-space:nowrap">
         <button class="act-btn edit" onclick="editProduct(${p.id})" title="Редагувати"><i class="fas fa-pen"></i></button>
@@ -693,7 +693,7 @@ async function loadOrders() {
         <td><strong>${o.customerName||'—'}</strong></td>
         <td style="font-size:13px">${o.customerPhone||'—'}</td>
         <td style="font-size:12px;color:var(--gray-500);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${items}">${items||'—'}</td>
-        <td style="font-weight:700;color:var(--orange)">${(o.total||0).toLocaleString('uk-UA')} ₴</td>
+        <td style="font-weight:700;color:var(--orange)">${(o.total||0).toLocaleString('de-DE')} €</td>
         <td>
           <select class="status-sel" onchange="updateOrderStatus(${o.id},this.value)">
             ${statusOpts}

@@ -765,7 +765,7 @@ function renderProductCard(p) {
     <div style="margin-top:auto">
       ${stockHtml}
       <div class="product-footer" style="margin-top:8px">
-        <div class="product-price">${p.price.toLocaleString('uk-UA')} <span>грн</span></div>
+        <div class="product-price">€${p.price.toLocaleString('de-DE')} </div>
         <button class="btn-cart" onclick="event.stopPropagation();addToCart(${p.id})">
           <i class="fas fa-cart-plus"></i> В кошик
         </button>
@@ -803,7 +803,7 @@ async function loadProductDetail(id) {
       <span class="badge badge-category">${p.category}</span>
     </div>
     <h1>${p.name}</h1>
-    <div class="detail-price">${p.price.toLocaleString('uk-UA')} грн</div>
+    <div class="detail-price">€${p.price.toLocaleString('de-DE')}</div>
     <div style="margin-bottom:16px;font-size:14px">${stockLabel}</div>
     <div class="detail-attrs">
       ${p.oem?`<div class="attr-row"><span class="attr-label">OEM номер</span><span class="attr-value">${p.oem}</span></div>`:''}
@@ -884,14 +884,14 @@ function renderCart() {
   <div class="cart-item-img">${c.image?`<img src="${c.image}" alt="">`:`<span style="font-size:22px">${CAT_EMOJI[c.category]||'🔧'}</span>`}</div>
   <div>
     <div class="cart-item-name">${c.name}</div>
-    <div class="cart-item-meta">${c.price.toLocaleString('uk-UA')} грн / шт</div>
+    <div class="cart-item-meta">€${c.price.toLocaleString('de-DE')} / шт</div>
   </div>
   <div class="qty-ctrl">
     <button class="qty-btn" onclick="changeQty(${i},-1)">−</button>
     <span class="qty-val">${c.qty}</span>
     <button class="qty-btn" onclick="changeQty(${i},1)">+</button>
   </div>
-  <div class="cart-item-price">${(c.price*c.qty).toLocaleString('uk-UA')} грн</div>
+  <div class="cart-item-price">€${(c.price*c.qty).toLocaleString('de-DE')}</div>
   <button class="cart-del" onclick="removeCartItem(${i})" title="Видалити"><i class="fas fa-times"></i></button>
 </div>`).join('')}
     <div class="checkout-form" id="checkoutForm">
@@ -917,10 +917,10 @@ function renderCart() {
   <div>
     <div class="cart-summary">
       <h3>Підсумок</h3>
-      <div class="sum-row"><span>Товарів (${cart.reduce((s,c)=>s+c.qty,0)} шт)</span><span>${subtotal.toLocaleString('uk-UA')} грн</span></div>
-      <div class="sum-row"><span>Доставка</span><span>${delivery?delivery+' грн':'Безкоштовно'}</span></div>
-      ${delivery===0?`<div style="font-size:12px;color:var(--green);margin-top:4px"><i class="fas fa-gift"></i> Безкоштовна доставка від 1500 грн</div>`:`<div style="font-size:12px;color:var(--gray-500);margin-top:4px">Безкоштовна доставка від 1500 грн</div>`}
-      <div class="sum-total"><span>Разом</span><span style="color:var(--orange)">${total.toLocaleString('uk-UA')} грн</span></div>
+      <div class="sum-row"><span>Товарів (${cart.reduce((s,c)=>s+c.qty,0)} шт)</span><span>€${subtotal.toLocaleString('de-DE')}</span></div>
+      <div class="sum-row"><span>Доставка</span><span>${delivery?'€'+delivery:'Безкоштовно'}</span></div>
+      ${delivery===0?`<div style="font-size:12px;color:var(--green);margin-top:4px"><i class="fas fa-gift"></i> Безкоштовна доставка від €150</div>`:`<div style="font-size:12px;color:var(--gray-500);margin-top:4px">Безкоштовна доставка від €150</div>`}
+      <div class="sum-total"><span>Разом</span><span style="color:var(--orange)">€${total.toLocaleString('de-DE')}</span></div>
       <button class="btn-checkout" onclick="document.getElementById('checkoutForm').scrollIntoView({behavior:'smooth'})">
         <i class="fas fa-arrow-down"></i> Оформити замовлення
       </button>
