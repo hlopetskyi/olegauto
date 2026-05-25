@@ -434,11 +434,19 @@
       <div class="catalog-filters">
         <div class="filters-row">
           <select class="filter-select" id="filterBrand" onchange="applyFilters()">
-            <option value="">Всі бренди</option>
+            <option value="">Всі марки авто</option>
             <option value="Renault">Renault</option>
             <option value="Peugeot">Peugeot</option>
             <option value="Citroën">Citroën</option>
             <option value="Fiat">Fiat</option>
+            <option value="Opel">Opel</option>
+            <option value="Ford">Ford</option>
+            <option value="Nissan">Nissan</option>
+            <option value="Mercedes">Mercedes</option>
+            <option value="Volvo">Volvo</option>
+            <option value="Alfa Romeo">Alfa Romeo</option>
+            <option value="Lancia">Lancia</option>
+            <option value="Mazda">Mazda</option>
           </select>
           <select class="filter-select" id="filterCategory" onchange="applyFilters()">
             <option value="">Всі категорії</option>
@@ -678,7 +686,9 @@ function findParts() {
 }
 
 function filterByBrand(brand) {
-  showPage('catalog',{brand});
+  catalogCarBrand = brand;
+  catalogCarModel = '';
+  showPage('catalog',{carBrand: brand});
 }
 
 // ============ CATALOG ============
@@ -710,14 +720,15 @@ async function loadCatalogProducts() {
   const el = document.getElementById('catalogProducts');
   el.innerHTML = '<div class="loading"><div class="spinner"></div><span>Завантаження...</span></div>';
 
-  const brand = document.getElementById('filterBrand').value;
+  const filterBrandVal = document.getElementById('filterBrand').value;
   const category = document.getElementById('filterCategory').value;
   const sort = document.getElementById('filterSort').value;
   const search = document.getElementById('headerSearch').value;
 
+  const activeCarBrand = filterBrandVal || catalogCarBrand;
+
   let url = `/api/products?sort=${sort}`;
-  if(brand) url += `&brand=${encodeURIComponent(brand)}`;
-  if(catalogCarBrand) url += `&carBrand=${encodeURIComponent(catalogCarBrand)}`;
+  if(activeCarBrand) url += `&carBrand=${encodeURIComponent(activeCarBrand)}`;
   if(catalogCarModel) url += `&carModel=${encodeURIComponent(catalogCarModel)}`;
   if(category) url += `&category=${encodeURIComponent(category)}`;
   if(catalogCondition) url += `&condition=${catalogCondition}`;
@@ -726,7 +737,7 @@ async function loadCatalogProducts() {
 
   try {
     const products = await api(url);
-    renderActiveFilters(brand,category,catalogCondition,catalogInStock,search);
+    renderActiveFilters(activeCarBrand,category,catalogCondition,catalogInStock,search);
     document.getElementById('resultsInfo').textContent = `Знайдено ${products.length} товар${pluralUa(products.length)}`;
     if(!products.length){
       el.innerHTML='<div class="empty-state"><i class="fas fa-search" style="font-size:48px;margin-bottom:16px;opacity:.3;display:block"></i><h3>Нічого не знайдено</h3><p>Спробуйте змінити фільтри</p></div>';
@@ -754,7 +765,7 @@ function renderActiveFilters(brand,category,condition,inStock,search) {
 }
 
 function clearFilter(type) {
-  if(type==='brand') { document.getElementById('filterBrand').value=''; }
+  if(type==='brand') { document.getElementById('filterBrand').value=''; catalogCarBrand=''; catalogCarModel=''; }
   if(type==='category') { document.getElementById('filterCategory').value=''; }
   if(type==='condition') { setCondFilterVal(''); }
   if(type==='stock') { catalogInStock=false; document.getElementById('stockToggle').classList.remove('on'); }
