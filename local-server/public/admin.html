@@ -185,6 +185,9 @@
     <div class="nav-item" onclick="showSection('orders')" id="nav-orders">
       <i class="fas fa-clipboard-list"></i> Замовлення
     </div>
+    <div class="nav-item" onclick="showSection('settings')" id="nav-settings">
+      <i class="fas fa-lock"></i> Безпека
+    </div>
   </nav>
   <div class="sidebar-footer">
     <a href="/" target="_blank"><i class="fas fa-external-link-alt"></i> Відкрити магазин</a>
@@ -398,6 +401,28 @@
           <tbody id="ordersTableBody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <div class="section" id="section-settings">
+    <div class="page-header"><div class="page-title">Безпека — зміна логіну та пароля</div></div>
+    <div class="card" style="max-width:420px">
+      <div style="margin-bottom:16px;color:var(--gray-500);font-size:14px">
+        Після зміни браузер запитає нові дані при наступному вході.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Новий логін</label>
+        <input type="text" class="form-control" id="cred-user" placeholder="admin" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Новий пароль</label>
+        <input type="password" class="form-control" id="cred-pass" placeholder="мінімум 4 символи" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Підтвердити пароль</label>
+        <input type="password" class="form-control" id="cred-pass2" placeholder="повторіть пароль" autocomplete="new-password">
+      </div>
+      <button class="btn-primary" onclick="saveCredentials()"><i class="fas fa-save"></i> Зберегти</button>
     </div>
   </div>
 
@@ -717,6 +742,26 @@ function getStatusLabel(s) {
 function getStatusCls(s) {
   const m={new:'status-new',processing:'status-processing',shipped:'status-shipped',done:'status-done',cancelled:'status-cancelled'};
   return m[s]||'status-new';
+}
+
+async function saveCredentials() {
+  const newUser = document.getElementById('cred-user').value.trim();
+  const newPass = document.getElementById('cred-pass').value;
+  const confirmPass = document.getElementById('cred-pass2').value;
+  if (!newUser || !newPass) return showToast('Заповніть всі поля', 'error');
+  if (newPass !== confirmPass) return showToast('Паролі не співпадають', 'error');
+  if (newPass.length < 4) return showToast('Пароль мінімум 4 символи', 'error');
+  const res = await fetch('/api/credentials', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newUser, newPass, confirmPass })
+  });
+  const data = await res.json();
+  if (!res.ok) return showToast(data.error || 'Помилка', 'error');
+  showToast('Збережено! При наступному вході використовуйте нові дані.', 'success');
+  document.getElementById('cred-user').value = '';
+  document.getElementById('cred-pass').value = '';
+  document.getElementById('cred-pass2').value = '';
 }
 
 function showToast(msg, type='') {

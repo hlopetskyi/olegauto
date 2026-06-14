@@ -5,12 +5,25 @@ const fs = require('fs');
 const path = require('path');
 const basicAuth = require('express-basic-auth');
 
-const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASS = process.env.ADMIN_PASS;
+let adminCredentials = {
+  user: process.env.ADMIN_USER || 'admin',
+  pass: process.env.ADMIN_PASS || 'admin',
+};
 
-if (!ADMIN_PASS) {
-  console.error('ERROR: ADMIN_PASS not set in .env — server will not start');
-  process.exit(1);
+const ENV_PATH = path.join(__dirname, '.env');
+
+function saveCredentials(user, pass) {
+  adminCredentials = { user, pass };
+  fs.writeFileSync(ENV_PATH, `ADMIN_USER=${user}\nADMIN_PASS=${pass}\n`);
+}
+
+function dynamicAdminAuth(req, res, next) {
+  const handler = basicAuth({
+    users: { [adminCredentials.user]: adminCredentials.pass },
+    challenge: true,
+    realm: 'OlegAuto Admin',
+  });
+  handler(req, res, next);
 }
 
 const app = express();
@@ -191,16 +204,20 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
-// ============ PAGES ============
-const adminAuth = basicAuth({
-  users: { [ADMIN_USER]: ADMIN_PASS },
-  challenge: true,
-  realm: 'OlegAuto Admin',
+// ============ CREDENTIALS API ============
+app.post('/api/credentials', dynamicAdminAuth, (req, res) => {
+  const { newUser, newPass, confirmPass } = req.body;
+  if (!newUser || !newPass) return res.status(400).json({ error: 'Логін і пароль обовʼязкові' });
+  if (newPass !== confirmPass) return res.status(400).json({ error: 'Паролі не співпадають' });
+  if (newPass.length < 4) return res.status(400).json({ error: 'Пароль мінімум 4 символи' });
+  saveCredentials(newUser, newPass);
+  res.json({ ok: true });
 });
 
-app.get('/admin', adminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/admin/*', adminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.use('/api', adminAuth);
+// ============ PAGES ============
+app.get('/admin', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/admin/*', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.use('/api', dynamicAdminAuth);
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => {
