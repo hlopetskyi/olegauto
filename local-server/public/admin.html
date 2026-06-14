@@ -276,7 +276,16 @@
       </div>
       <div style="padding:14px 20px;border-top:1.5px solid var(--gray-200)">
         <div class="pagination">
-          <div class="pag-info" id="pagInfo"></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="pag-info" id="pagInfo"></div>
+            <select id="pageSizeSelect" onchange="changePageSize(this.value)" style="padding:4px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;color:var(--gray-600)">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span style="font-size:13px;color:var(--gray-400)">на сторінці</span>
+          </div>
           <div class="pag-btns" id="pagBtns"></div>
         </div>
       </div>
@@ -447,7 +456,7 @@
 let allProducts = [];
 let filteredProducts = [];
 let currentPage = 1;
-const PAGE_SIZE = 10;
+let PAGE_SIZE = 10;
 
 const COND_LABELS = {new:'Новий',used:'Б/У',refurbished:'Відновлений'};
 const COND_BADGE = {new:'badge-new',used:'badge-used',refurbished:'badge-refurbished'};
@@ -608,6 +617,12 @@ function renderProductsTable() {
   }
   btns+=`<button class="pag-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''}>Наст →</button>`;
   document.getElementById('pagBtns').innerHTML = btns;
+}
+
+function changePageSize(val) {
+  PAGE_SIZE = parseInt(val);
+  currentPage = 1;
+  renderProductsTable();
 }
 
 function goPage(n) {
