@@ -405,24 +405,29 @@
   </div>
 
   <div class="section" id="section-settings">
-    <div class="page-header"><div class="page-title">Безпека — зміна логіну та пароля</div></div>
+    <div class="page-header"><div class="page-title">Безпека — адміністратори</div></div>
+
+    <div class="card" style="margin-bottom:24px">
+      <div style="font-weight:600;margin-bottom:16px;font-size:15px">Список адміністраторів</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Логін</th><th style="width:220px">Новий пароль</th><th style="width:120px"></th></tr></thead>
+          <tbody id="adminsTableBody"><tr><td colspan="3" style="text-align:center;color:var(--gray-400)">Завантаження...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="card" style="max-width:420px">
-      <div style="margin-bottom:16px;color:var(--gray-500);font-size:14px">
-        Після зміни браузер запитає нові дані при наступному вході.
+      <div style="font-weight:600;margin-bottom:16px;font-size:15px">Додати адміністратора</div>
+      <div class="form-group">
+        <label class="form-label">Логін</label>
+        <input type="text" class="form-control" id="new-admin-user" placeholder="новий_логін" autocomplete="off">
       </div>
       <div class="form-group">
-        <label class="form-label">Новий логін</label>
-        <input type="text" class="form-control" id="cred-user" placeholder="admin" autocomplete="username">
+        <label class="form-label">Пароль</label>
+        <input type="password" class="form-control" id="new-admin-pass" placeholder="мінімум 4 символи" autocomplete="new-password">
       </div>
-      <div class="form-group">
-        <label class="form-label">Новий пароль</label>
-        <input type="password" class="form-control" id="cred-pass" placeholder="мінімум 4 символи" autocomplete="new-password">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Підтвердити пароль</label>
-        <input type="password" class="form-control" id="cred-pass2" placeholder="повторіть пароль" autocomplete="new-password">
-      </div>
-      <button class="btn-primary" onclick="saveCredentials()"><i class="fas fa-save"></i> Зберегти</button>
+      <button class="btn-primary" onclick="addAdmin()"><i class="fas fa-plus"></i> Додати</button>
     </div>
   </div>
 
@@ -460,6 +465,7 @@ function showSection(name) {
   if(name==='dashboard') loadDashboard();
   if(name==='products') loadProducts();
   if(name==='orders') loadOrders();
+  if(name==='settings') loadAdmins();
 }
 
 window.addEventListener('load', ()=> loadDashboard());
@@ -744,24 +750,59 @@ function getStatusCls(s) {
   return m[s]||'status-new';
 }
 
-async function saveCredentials() {
-  const newUser = document.getElementById('cred-user').value.trim();
-  const newPass = document.getElementById('cred-pass').value;
-  const confirmPass = document.getElementById('cred-pass2').value;
-  if (!newUser || !newPass) return showToast('Заповніть всі поля', 'error');
-  if (newPass !== confirmPass) return showToast('Паролі не співпадають', 'error');
-  if (newPass.length < 4) return showToast('Пароль мінімум 4 символи', 'error');
-  const res = await fetch('/api/credentials', {
+async function loadAdmins() {
+  const res = await fetch('/api/admins');
+  const users = await res.json();
+  const tbody = document.getElementById('adminsTableBody');
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td><strong>${u}</strong></td>
+      <td><input type="password" class="form-control" id="pass-${u}" placeholder="новий пароль" autocomplete="new-password" style="margin:0"></td>
+      <td style="display:flex;gap:8px;padding:10px 12px">
+        <button class="btn-primary btn-sm" onclick="changeAdminPass('${u}')"><i class="fas fa-save"></i></button>
+        <button class="btn-danger btn-sm" onclick="deleteAdmin('${u}')"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+async function addAdmin() {
+  const username = document.getElementById('new-admin-user').value.trim();
+  const password = document.getElementById('new-admin-pass').value;
+  if (!username || !password) return showToast('Заповніть всі поля', 'error');
+  const res = await fetch('/api/admins', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ newUser, newPass, confirmPass })
+    body: JSON.stringify({ username, password })
   });
   const data = await res.json();
   if (!res.ok) return showToast(data.error || 'Помилка', 'error');
-  showToast('Збережено! При наступному вході використовуйте нові дані.', 'success');
-  document.getElementById('cred-user').value = '';
-  document.getElementById('cred-pass').value = '';
-  document.getElementById('cred-pass2').value = '';
+  showToast(`Адміна "${username}" додано`, 'success');
+  document.getElementById('new-admin-user').value = '';
+  document.getElementById('new-admin-pass').value = '';
+  loadAdmins();
+}
+
+async function changeAdminPass(username) {
+  const password = document.getElementById(`pass-${username}`).value;
+  if (!password) return showToast('Введіть новий пароль', 'error');
+  const res = await fetch(`/api/admins/${encodeURIComponent(username)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
+  });
+  const data = await res.json();
+  if (!res.ok) return showToast(data.error || 'Помилка', 'error');
+  showToast(`Пароль для "${username}" змінено`, 'success');
+  document.getElementById(`pass-${username}`).value = '';
+}
+
+async function deleteAdmin(username) {
+  if (!confirm(`Видалити адміна "${username}"?`)) return;
+  const res = await fetch(`/api/admins/${encodeURIComponent(username)}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) return showToast(data.error || 'Помилка', 'error');
+  showToast(`Адміна "${username}" видалено`, 'success');
+  loadAdmins();
 }
 
 function showToast(msg, type='') {

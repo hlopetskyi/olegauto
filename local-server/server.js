@@ -5,21 +5,30 @@ const fs = require('fs');
 const path = require('path');
 const basicAuth = require('express-basic-auth');
 
-let adminCredentials = {
-  user: process.env.ADMIN_USER || 'admin',
-  pass: process.env.ADMIN_PASS || 'admin',
-};
+const ADMINS_PATH = path.join(__dirname, 'data', 'admins.json');
 
-const ENV_PATH = path.join(__dirname, '.env');
-
-function saveCredentials(user, pass) {
-  adminCredentials = { user, pass };
-  fs.writeFileSync(ENV_PATH, `ADMIN_USER=${user}\nADMIN_PASS=${pass}\n`);
+function loadAdmins() {
+  if (fs.existsSync(ADMINS_PATH)) {
+    try { return JSON.parse(fs.readFileSync(ADMINS_PATH, 'utf8')); } catch {}
+  }
+  // Migrate from .env on first run
+  const defaultUser = process.env.ADMIN_USER || 'admin';
+  const defaultPass = process.env.ADMIN_PASS || 'admin';
+  const admins = { [defaultUser]: defaultPass };
+  fs.mkdirSync(path.dirname(ADMINS_PATH), { recursive: true });
+  fs.writeFileSync(ADMINS_PATH, JSON.stringify(admins, null, 2));
+  return admins;
 }
+
+function saveAdmins(admins) {
+  fs.writeFileSync(ADMINS_PATH, JSON.stringify(admins, null, 2));
+}
+
+let admins = loadAdmins();
 
 function dynamicAdminAuth(req, res, next) {
   const handler = basicAuth({
-    users: { [adminCredentials.user]: adminCredentials.pass },
+    users: admins,
     challenge: true,
     realm: 'OlegAuto Admin',
   });
@@ -204,13 +213,37 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
-// ============ CREDENTIALS API ============
-app.post('/api/credentials', dynamicAdminAuth, (req, res) => {
-  const { newUser, newPass, confirmPass } = req.body;
-  if (!newUser || !newPass) return res.status(400).json({ error: 'Логін і пароль обовʼязкові' });
-  if (newPass !== confirmPass) return res.status(400).json({ error: 'Паролі не співпадають' });
-  if (newPass.length < 4) return res.status(400).json({ error: 'Пароль мінімум 4 символи' });
-  saveCredentials(newUser, newPass);
+// ============ ADMINS API ============
+app.get('/api/admins', dynamicAdminAuth, (req, res) => {
+  res.json(Object.keys(admins));
+});
+
+app.post('/api/admins', dynamicAdminAuth, (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Логін і пароль обовʼязкові' });
+  if (password.length < 4) return res.status(400).json({ error: 'Пароль мінімум 4 символи' });
+  if (admins[username]) return res.status(400).json({ error: 'Такий логін вже існує' });
+  admins[username] = password;
+  saveAdmins(admins);
+  res.json({ ok: true });
+});
+
+app.put('/api/admins/:username', dynamicAdminAuth, (req, res) => {
+  const { username } = req.params;
+  const { password } = req.body;
+  if (!admins[username]) return res.status(404).json({ error: 'Адміна не знайдено' });
+  if (!password || password.length < 4) return res.status(400).json({ error: 'Пароль мінімум 4 символи' });
+  admins[username] = password;
+  saveAdmins(admins);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admins/:username', dynamicAdminAuth, (req, res) => {
+  const { username } = req.params;
+  if (!admins[username]) return res.status(404).json({ error: 'Адміна не знайдено' });
+  if (Object.keys(admins).length <= 1) return res.status(400).json({ error: 'Не можна видалити останнього адміна' });
+  delete admins[username];
+  saveAdmins(admins);
   res.json({ ok: true });
 });
 
