@@ -84,7 +84,7 @@ function nextId(arr) {
 // ============ PRODUCTS API ============
 app.get('/api/products', (req, res) => {
   let products = readData('products.json');
-  const { brand, category, condition, inStock, search, sort, carBrand, carModel } = req.query;
+  const { brand, category, condition, inStock, search, sort, carBrand, carModel, yearFrom, yearTo, priceMin, priceMax } = req.query;
 
   if (brand) products = products.filter(p => p.brand === brand);
   if (carBrand) products = products.filter(p => {
@@ -98,6 +98,10 @@ app.get('/api/products', (req, res) => {
   if (category) products = products.filter(p => p.category === category);
   if (condition && condition !== 'all') products = products.filter(p => p.condition === condition);
   if (inStock === 'true') products = products.filter(p => p.stock > 0);
+  if (yearFrom) products = products.filter(p => !p.yearTo || parseInt(p.yearTo) >= parseInt(yearFrom));
+  if (yearTo) products = products.filter(p => !p.yearFrom || parseInt(p.yearFrom) <= parseInt(yearTo));
+  if (priceMin) products = products.filter(p => p.price >= parseFloat(priceMin));
+  if (priceMax) products = products.filter(p => p.price <= parseFloat(priceMax));
   if (search) {
     const q = search.toLowerCase();
     products = products.filter(p =>

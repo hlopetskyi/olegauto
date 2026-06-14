@@ -505,6 +505,21 @@
             <option value="price_desc">Ціна ↓</option>
           </select>
         </div>
+        <div class="filters-row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:13px;color:var(--gray-500);white-space:nowrap">Рік:</span>
+            <input type="number" class="filter-select" id="filterYearFrom" placeholder="від" min="1990" max="2030" style="width:90px" onchange="applyFilters()">
+            <span style="color:var(--gray-400)">—</span>
+            <input type="number" class="filter-select" id="filterYearTo" placeholder="до" min="1990" max="2030" style="width:90px" onchange="applyFilters()">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:13px;color:var(--gray-500);white-space:nowrap">Ціна €:</span>
+            <input type="number" class="filter-select" id="filterPriceMin" placeholder="від" min="0" style="width:90px" onchange="applyFilters()">
+            <span style="color:var(--gray-400)">—</span>
+            <input type="number" class="filter-select" id="filterPriceMax" placeholder="до" min="0" style="width:90px" onchange="applyFilters()">
+          </div>
+          <button onclick="resetAllFilters()" style="background:none;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 14px;font-size:13px;color:var(--gray-500);cursor:pointer;margin-left:auto" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--gray-200)';this.style.color='var(--gray-500)'"><i class="fas fa-times"></i> Скинути фільтри</button>
+        </div>
         <div class="active-filters" id="activeFilters"></div>
       </div>
 
@@ -780,6 +795,10 @@ async function loadCatalogProducts() {
   const category = document.getElementById('filterCategory').value;
   const sort = document.getElementById('filterSort').value;
   const search = document.getElementById('headerSearch').value;
+  const yearFrom = document.getElementById('filterYearFrom').value;
+  const yearTo = document.getElementById('filterYearTo').value;
+  const priceMin = document.getElementById('filterPriceMin').value;
+  const priceMax = document.getElementById('filterPriceMax').value;
 
   const activeCarBrand = filterBrandVal || catalogCarBrand;
 
@@ -790,10 +809,14 @@ async function loadCatalogProducts() {
   if(catalogCondition) url += `&condition=${catalogCondition}`;
   if(catalogInStock) url += `&inStock=true`;
   if(search) url += `&search=${encodeURIComponent(search)}`;
+  if(yearFrom) url += `&yearFrom=${yearFrom}`;
+  if(yearTo) url += `&yearTo=${yearTo}`;
+  if(priceMin) url += `&priceMin=${priceMin}`;
+  if(priceMax) url += `&priceMax=${priceMax}`;
 
   try {
     const products = await api(url);
-    renderActiveFilters(activeCarBrand,category,catalogCondition,catalogInStock,search);
+    renderActiveFilters(activeCarBrand,category,catalogCondition,catalogInStock,search,yearFrom,yearTo,priceMin,priceMax);
     document.getElementById('resultsInfo').textContent = `Знайдено ${products.length} товар${pluralUa(products.length)}`;
     if(!products.length){
       el.innerHTML='<div class="empty-state"><i class="fas fa-search" style="font-size:48px;margin-bottom:16px;opacity:.3;display:block"></i><h3>Нічого не знайдено</h3><p>Спробуйте змінити фільтри</p></div>';
@@ -809,7 +832,7 @@ function pluralUa(n) {
   return 'ів';
 }
 
-function renderActiveFilters(brand,category,condition,inStock,search) {
+function renderActiveFilters(brand,category,condition,inStock,search,yearFrom,yearTo,priceMin,priceMax) {
   const el = document.getElementById('activeFilters');
   let html = '';
   if(brand) html+=`<div class="af-pill">Бренд: ${brand}<button onclick="clearFilter('brand')">×</button></div>`;
@@ -817,15 +840,33 @@ function renderActiveFilters(brand,category,condition,inStock,search) {
   if(condition) html+=`<div class="af-pill">Стан: ${COND_LABELS[condition]}<button onclick="clearFilter('condition')">×</button></div>`;
   if(inStock) html+=`<div class="af-pill">В наявності<button onclick="clearFilter('stock')">×</button></div>`;
   if(search) html+=`<div class="af-pill">Пошук: "${search}"<button onclick="clearFilter('search')">×</button></div>`;
+  if(yearFrom||yearTo) html+=`<div class="af-pill">Рік: ${yearFrom||'..'}–${yearTo||'..'}<button onclick="clearFilter('year')">×</button></div>`;
+  if(priceMin||priceMax) html+=`<div class="af-pill">Ціна: ${priceMin||0}–${priceMax||'∞'} €<button onclick="clearFilter('price')">×</button></div>`;
   el.innerHTML = html;
 }
 
 function clearFilter(type) {
   if(type==='brand') { document.getElementById('filterBrand').value=''; catalogCarBrand=''; catalogCarModel=''; }
-  if(type==='category') { document.getElementById('filterCategory').value=''; }
-  if(type==='condition') { setCondFilterVal(''); }
+  if(type==='category') document.getElementById('filterCategory').value='';
+  if(type==='condition') setCondFilterVal('');
   if(type==='stock') { catalogInStock=false; document.getElementById('stockToggle').classList.remove('on'); }
-  if(type==='search') { document.getElementById('headerSearch').value=''; }
+  if(type==='search') document.getElementById('headerSearch').value='';
+  if(type==='year') { document.getElementById('filterYearFrom').value=''; document.getElementById('filterYearTo').value=''; }
+  if(type==='price') { document.getElementById('filterPriceMin').value=''; document.getElementById('filterPriceMax').value=''; }
+  loadCatalogProducts();
+}
+
+function resetAllFilters() {
+  document.getElementById('filterBrand').value='';
+  document.getElementById('filterCategory').value='';
+  document.getElementById('filterYearFrom').value='';
+  document.getElementById('filterYearTo').value='';
+  document.getElementById('filterPriceMin').value='';
+  document.getElementById('filterPriceMax').value='';
+  document.getElementById('headerSearch').value='';
+  catalogCarBrand=''; catalogCarModel=''; catalogCondition=''; catalogInStock=false;
+  setCondFilterVal('');
+  document.getElementById('stockToggle').classList.remove('on');
   loadCatalogProducts();
 }
 
