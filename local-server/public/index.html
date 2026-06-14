@@ -4,6 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OlegAvto — Запчастини для французьких авто</title>
+<meta name="description" content="Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою по всій Україні.">
+<meta name="keywords" content="запчастини Renault, запчастини Peugeot, запчастини Citroen, запчастини Fiat, автозапчастини Україна, б/у запчастини французькі авто">
+<link rel="canonical" href="https://olegavto.com/">
+<meta property="og:site_name" content="OlegAvto">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://olegavto.com/">
+<meta property="og:title" content="OlegAvto — Запчастини для французьких авто">
+<meta property="og:description" content="Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою.">
+<meta property="og:locale" content="uk_UA">
+<meta name="robots" content="index, follow">
+<script type="application/ld+json" id="jsonLd">
+{
+  "@context": "https://schema.org",
+  "@type": "AutoPartsStore",
+  "name": "OlegAvto",
+  "description": "Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні",
+  "url": "https://olegavto.com",
+  "address": {"@type": "PostalAddress", "addressCountry": "UA"},
+  "areaServed": "UA"
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
@@ -627,6 +648,23 @@ const STATUS_MAP = {
 };
 
 // ============ ROUTING ============
+const SITE = 'https://olegavto.com';
+const DEFAULT_DESC = 'Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою.';
+
+function updateMeta({ title, desc, image, url, jsonLd } = {}) {
+  document.title = title || 'OlegAvto — Запчастини для французьких авто';
+  const setMeta = (sel, val) => { const el = document.querySelector(sel); if(el) el.setAttribute('content', val); };
+  setMeta('meta[name="description"]', desc || DEFAULT_DESC);
+  setMeta('meta[property="og:title"]', title || 'OlegAvto — Запчастини для французьких авто');
+  setMeta('meta[property="og:description"]', desc || DEFAULT_DESC);
+  setMeta('meta[property="og:url"]', url || SITE);
+  if(image) setMeta('meta[property="og:image"]', image);
+  const canonical = document.querySelector('link[rel="canonical"]');
+  if(canonical) canonical.href = url || SITE + '/';
+  const ld = document.getElementById('jsonLd');
+  if(ld && jsonLd) ld.textContent = JSON.stringify(jsonLd);
+}
+
 function showPage(name, opts={}) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
@@ -639,7 +677,8 @@ function showPage(name, opts={}) {
   window.location.hash = name;
   window.scrollTo(0,0);
 
-  if(name==='home') loadHomeProducts();
+  if(name==='home') { updateMeta({ url: SITE+'/' }); loadHomeProducts(); }
+  if(name==='contacts') updateMeta({ title:'Контакти — OlegAvto', desc:'Зв\'яжіться з нами для консультації по запчастинам для Renault, Peugeot, Citroën, Fiat.', url: SITE+'/#contacts' });
   if(name==='catalog') {
     if(opts.brand){ document.getElementById('filterBrand').value=opts.brand; }
     if(opts.condition){ setCondFilterVal(opts.condition); }
@@ -847,6 +886,34 @@ async function loadProductDetail(id) {
     const stockLabel = p.stock>5 ? `<span style="color:var(--green)"><i class="fas fa-check-circle"></i> В наявності (${p.stock} шт)</span>`
       : p.stock>0 ? `<span style="color:var(--amber)"><i class="fas fa-exclamation-circle"></i> Останні ${p.stock} шт</span>`
       : `<span style="color:var(--red)"><i class="fas fa-times-circle"></i> Немає в наявності</span>`;
+
+    const compatStr = (p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand,model:p.model}])
+      .filter(c=>c.brand).map(c=>c.model?`${c.brand} ${c.model}`:c.brand).join(', ');
+    const metaDesc = `${p.name}${compatStr?' для '+compatStr:''}. ${p.condition==='new'?'Новий':'Б/У'}. Ціна: €${p.price}. ${p.stock>0?'В наявності.':'Під замовлення.'} Доставка Новою Поштою.`;
+    updateMeta({
+      title: `${p.name} — OlegAvto`,
+      desc: metaDesc,
+      image: imgs[0] || '',
+      url: `${SITE}/#product-${p.id}`,
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: p.name,
+        description: metaDesc,
+        image: imgs,
+        sku: p.article || p.oem,
+        brand: { '@type': 'Brand', name: p.supplierBrand || p.brand || 'OlegAvto' },
+        offers: {
+          '@type': 'Offer',
+          price: p.price,
+          priceCurrency: 'EUR',
+          availability: p.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+          url: `${SITE}/#product-${p.id}`,
+          seller: { '@type': 'Organization', name: 'OlegAvto' }
+        }
+      }
+    });
+
     el.innerHTML = `
 <div class="detail-grid">
   <div class="detail-img">${imgHtml}</div>

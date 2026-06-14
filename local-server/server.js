@@ -265,6 +265,31 @@ app.delete('/api/admins/:username', dynamicAdminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ============ SEO ============
+const SITE_URL = 'https://olegavto.com';
+
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send(`User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  const products = readData('products.json');
+  const staticPages = [['', '1.0'], ['#catalog', '0.7'], ['#contacts', '0.7']];
+  const productUrls = products.map(p =>
+    `  <url><loc>${SITE_URL}/#product-${p.id}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`
+  );
+  const staticUrls = staticPages.map(([p, pri]) =>
+    `  <url><loc>${SITE_URL}/${p}</loc><changefreq>daily</changefreq><priority>${pri}</priority></url>`
+  );
+  res.type('application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${staticUrls.join('\n')}
+${productUrls.join('\n')}
+</urlset>`);
+});
+
 // ============ PAGES ============
 app.get('/admin', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/admin/*', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
