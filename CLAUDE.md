@@ -17,10 +17,10 @@ When writing a file in the "MUST NOT" list, switch to normal full English regard
 
 ## Commit Rules
 
-- Commit after every complex or multi-file change — do not batch unrelated changes into one commit
+- After every meaningful change: commit AND push to GitHub automatically — do not wait for user to ask
 - Simple one-liner fixes may be grouped if clearly related
 - Commit message: imperative, ≤50 chars subject, explain *why* in body if non-obvious
-- Always push after committing unless told otherwise
+- Always push immediately after committing
 
 ## Obsidian — Conversation Context
 
@@ -38,7 +38,7 @@ When writing a file in the "MUST NOT" list, switch to normal full English regard
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **olegauto** (126 symbols, 130 relationships, 0 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **olegauto** (136 symbols, 139 relationships, 0 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

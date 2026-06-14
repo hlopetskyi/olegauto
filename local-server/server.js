@@ -1,10 +1,20 @@
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const basicAuth = require('express-basic-auth');
+
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASS;
+
+if (!ADMIN_PASS) {
+  console.error('ERROR: ADMIN_PASS not set in .env — server will not start');
+  process.exit(1);
+}
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
@@ -182,8 +192,15 @@ app.get('/api/stats', (req, res) => {
 });
 
 // ============ PAGES ============
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/admin/*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+const adminAuth = basicAuth({
+  users: { [ADMIN_USER]: ADMIN_PASS },
+  challenge: true,
+  realm: 'OlegAuto Admin',
+});
+
+app.get('/admin', adminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/admin/*', adminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.use('/api', adminAuth);
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => {

@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "ui-ux-pro-max-skill": {
+      "source": {
+        "source": "url",
+        "url": "https://ui-ux-pro-max-skill.nextlevelbuilder.io/marketplace.json"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true
+  }
+}
