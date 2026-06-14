@@ -500,12 +500,14 @@ app.put('/api/orders/:id/status', (req, res) => {
 app.get('/api/stats', (req, res) => {
   const products = readData('products.json');
   const orders = readData('orders.json');
+  const todayStr = new Date().toISOString().slice(0, 10);
   res.json({
     totalProducts: products.length,
     newProducts: products.filter(p => p.condition === 'new').length,
     usedProducts: products.filter(p => p.condition === 'used').length,
     totalOrders: orders.length,
     newOrders: orders.filter(o => o.status === 'new').length,
+    todayOrders: orders.filter(o => (o.createdAt || '').startsWith(todayStr)).length,
     revenue: orders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + (o.total || 0), 0)
   });
 });

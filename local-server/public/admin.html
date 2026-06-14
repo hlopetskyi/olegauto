@@ -219,7 +219,7 @@
       <h3 id="confirmTitle">Підтвердити дію</h3>
       <p id="confirmText">Ви впевнені?</p>
       <div class="modal-btns">
-        <button class="btn-secondary" onclick="document.getElementById('confirmModal').style.display='none'">Скасувати</button>
+        <button class="btn-secondary" id="confirmCancelBtn" onclick="document.getElementById('confirmModal').style.display='none'">Скасувати</button>
         <button class="btn-danger" id="confirmOkBtn">Так, видалити</button>
       </div>
     </div>
@@ -236,7 +236,7 @@
       <div class="stat-card stat-blue"><div class="stat-label">Всього товарів<i class="fas fa-boxes stat-icon"></i></div><div class="stat-val" id="s-total">—</div></div>
       <div class="stat-card stat-green"><div class="stat-label">Нових товарів<i class="fas fa-star stat-icon"></i></div><div class="stat-val" id="s-new">—</div></div>
       <div class="stat-card stat-amber"><div class="stat-label">Б/У товарів<i class="fas fa-recycle stat-icon"></i></div><div class="stat-val" id="s-used">—</div></div>
-      <div class="stat-card stat-red"><div class="stat-label">Нових замовлень<i class="fas fa-bell stat-icon"></i></div><div class="stat-val" id="s-orders">—</div></div>
+      <div class="stat-card stat-red"><div class="stat-label">Нових замовлень<i class="fas fa-bell stat-icon"></i></div><div class="stat-val" id="s-orders">—</div><div style="font-size:11px;color:var(--gray-400);margin-top:6px">Сьогодні: <span id="s-today">—</span></div></div>
       <div class="stat-card stat-orange"><div class="stat-label">Загальний дохід<i class="fas fa-hryvnia-sign stat-icon"></i></div><div class="stat-val" id="s-revenue">—</div></div>
     </div>
 
@@ -614,7 +614,19 @@ function showSection(name) {
   if(name==='settings') loadAdmins();
 }
 
-window.addEventListener('load', ()=>{ loadDashboard(); initNotifications(); });
+window.addEventListener('load', ()=>{
+  loadDashboard();
+  initNotifications();
+  setInterval(loadDashboard, 60000);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const om = document.getElementById('orderModal');
+      if (om && om.style.display !== 'none') { closeOrderModal(); return; }
+      const cm = document.getElementById('confirmModal');
+      if (cm && cm.style.display !== 'none') { cm.style.display = 'none'; }
+    }
+  });
+});
 
 // ============ API ============
 async function api(url, opts={}) {
@@ -630,6 +642,7 @@ async function loadDashboard() {
     document.getElementById('s-new').textContent = stats.newProducts;
     document.getElementById('s-used').textContent = stats.usedProducts;
     document.getElementById('s-orders').textContent = stats.newOrders;
+    document.getElementById('s-today').textContent = stats.todayOrders ?? '—';
     document.getElementById('s-revenue').textContent = stats.revenue.toLocaleString('de-DE')+' €';
   } catch(e){}
 
@@ -641,7 +654,7 @@ async function loadDashboard() {
     if(!recent.length){ oEl.innerHTML='<div class="empty-state"><i class="fas fa-clipboard-list"></i><p>Замовлень ще немає</p></div>'; }
     else {
       oEl.innerHTML=`<table><thead><tr><th>№</th><th>Клієнт</th><th>Сума</th><th>Статус</th></tr></thead><tbody>
-        ${recent.map(o=>`<tr>
+        ${recent.map(o=>`<tr style="cursor:pointer" onclick="openOrderModal(${o.id})">
           <td><strong>#${o.id}</strong></td>
           <td>${o.customerName||'—'}</td>
           <td>${(o.total||0).toLocaleString('de-DE')} €</td>
@@ -659,7 +672,7 @@ async function loadDashboard() {
     else {
       lEl.innerHTML=`<div class="alert alert-warning" style="margin-bottom:14px"><i class="fas fa-exclamation-triangle"></i> ${low.length} товар${low.length===1?'':'ів'} закінчується або відсутній</div>
       <table><thead><tr><th>Назва</th><th>Бренд</th><th>Залишок</th></tr></thead><tbody>
-        ${low.map(p=>`<tr>
+        ${low.map(p=>`<tr style="cursor:pointer" onclick="editProductFromDash(${p.id})" title="Редагувати товар">
           <td style="font-weight:500;max-width:200px">${p.name}</td>
           <td>${p.brand}</td>
           <td><span class="${p.stock===0?'stock-out':'stock-low'}">${p.stock===0?'Немає':p.stock+' шт'}</span></td>
@@ -1047,17 +1060,23 @@ function updateBulkBar() {
   document.getElementById('bulkCount').textContent = `${n} обрано`;
 }
 
+function editProductFromDash(id) {
+  showSection('products');
+  setTimeout(() => editProduct(id), 300);
+}
+
 async function bulkDelete() {
   const ids = [...selectedIds];
   if(!ids.length) return;
   const word = ids.length===1?'товар':`${ids.length} товар${ids.length<5?'и':'ів'}`;
-  if(!confirm(`Видалити ${word}? Цю дію неможливо скасувати.`)) return;
-  const res = await fetch('/api/products/bulk',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
-  const data = await res.json();
-  showToast(`Видалено ${data.deleted} товар${data.deleted===1?'':'ів'}`,'success');
-  selectedIds.clear();
-  updateBulkBar();
-  await loadProducts();
+  showConfirm(`Видалити ${word}?`, 'Цю дію неможливо скасувати.', async () => {
+    const res = await fetch('/api/products/bulk',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
+    const data = await res.json();
+    showToast(`Видалено ${data.deleted} товар${data.deleted===1?'':'ів'}`,'success');
+    selectedIds.clear();
+    updateBulkBar();
+    await loadProducts();
+  });
 }
 
 async function bulkUpdate() {
@@ -1134,24 +1153,25 @@ function exportProductsCSV() {
 }
 
 // ============ IMPORT CSV ============
-async function importProductsCSV(input) {
+function importProductsCSV(input) {
   const file = input.files[0];
-  if(!file){return;}
+  if(!file){ return; }
   const count = allProducts.length;
-  if(!confirm(`Імпортувати товари з "${file.name}"?\n\nЦе замінить усі поточні ${count} товарів.\nПродовжити?`)){input.value='';return;}
-  const fd = new FormData();
-  fd.append('file', file);
-  showToast('Імпортування, зачекайте...','');
-  try {
-    const res = await fetch('/api/import',{method:'POST',body:fd});
-    const data = await res.json();
-    if(!res.ok) return showToast(data.error||'Помилка імпорту','error');
-    showToast(`Імпортовано ${data.imported} товарів`,'success');
-    await loadProducts(1);
-  } catch(e) {
-    showToast('Помилка імпорту','error');
-  }
-  input.value='';
+  showConfirm(`Імпортувати "${file.name}"?`, `Це замінить усі поточні ${count} товарів. Продовжити?`, async () => {
+    const fd = new FormData();
+    fd.append('file', file);
+    showToast('Імпортування, зачекайте...','');
+    try {
+      const res = await fetch('/api/import',{method:'POST',body:fd});
+      const data = await res.json();
+      if(!res.ok) return showToast(data.error||'Помилка імпорту','error');
+      showToast(`Імпортовано ${data.imported} товарів`,'success');
+      await loadProducts(1);
+    } catch(e) {
+      showToast('Помилка імпорту','error');
+    }
+    input.value='';
+  }, () => { input.value=''; });
 }
 
 // ============ STOCK WARNING ============
@@ -1492,15 +1512,16 @@ async function saveAdminEdit() {
 
 async function deleteAdminCurrent() {
   if (!selectedAdminUsername) return;
-  if (!confirm(`Видалити адміна "${selectedAdminUsername}"?`)) return;
-  const res = await fetch(`/api/admins/${encodeURIComponent(selectedAdminUsername)}`, { method: 'DELETE' });
-  const data = await res.json();
-  if (!res.ok) return showToast(data.error || 'Помилка', 'error');
-  showToast('Адміна видалено', 'success');
-  selectedAdminUsername = null;
-  document.getElementById('adminEditPanel').style.display = 'none';
-  document.getElementById('adminEditEmpty').style.display = 'block';
-  loadAdmins();
+  showConfirm(`Видалити адміна "${selectedAdminUsername}"?`, 'Цю дію неможливо скасувати.', async () => {
+    const res = await fetch(`/api/admins/${encodeURIComponent(selectedAdminUsername)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) return showToast(data.error || 'Помилка', 'error');
+    showToast('Адміна видалено', 'success');
+    selectedAdminUsername = null;
+    document.getElementById('adminEditPanel').style.display = 'none';
+    document.getElementById('adminEditEmpty').style.display = 'block';
+    loadAdmins();
+  });
 }
 
 async function addAdmin() {
@@ -1540,6 +1561,16 @@ async function loadAccessLog() {
   } catch(e) {
     el.innerHTML = `<div style="color:var(--danger)">Помилка завантаження: ${e.message}</div>`;
   }
+}
+
+function showConfirm(title, text, onOk, onCancel) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmText').textContent = text;
+  document.getElementById('confirmModal').style.display = 'flex';
+  const okBtn = document.getElementById('confirmOkBtn');
+  const cancelBtn = document.getElementById('confirmCancelBtn');
+  okBtn.onclick = () => { document.getElementById('confirmModal').style.display='none'; onOk(); };
+  cancelBtn.onclick = () => { document.getElementById('confirmModal').style.display='none'; if(onCancel) onCancel(); };
 }
 
 function showToast(msg, type='') {
