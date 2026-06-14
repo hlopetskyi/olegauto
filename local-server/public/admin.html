@@ -160,6 +160,19 @@
   .stock-low{color:var(--amber);font-weight:600}
   .stock-out{color:var(--red);font-weight:600}
 
+  /* BULK BAR */
+  .bulk-bar{display:none;padding:10px 20px;background:#eff6ff;border-bottom:1.5px solid #bfdbfe;align-items:center;gap:10px;flex-wrap:wrap}
+  .bulk-bar.active{display:flex}
+  .bulk-bar select{padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:7px;font-size:13px;background:#fff}
+  /* INLINE EDIT */
+  .inline-edit-cell{cursor:pointer}
+  .inline-edit-cell:hover{background:rgba(0,35,149,.04);border-radius:4px}
+  /* CHECKBOX */
+  .row-check{width:15px;height:15px;cursor:pointer;accent-color:var(--blue)}
+  /* FILTER BAR */
+  .filter-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .filter-bar select{padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;background:#fff;color:var(--gray-700);outline:none}
+  .filter-bar select:focus{border-color:var(--blue)}
   @media(max-width:1200px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
   @media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}}
 </style>
@@ -249,19 +262,67 @@
   <div class="section" id="section-products">
     <div class="page-header">
       <div class="page-title">Товари <span id="prodCount"></span></div>
-      <button class="btn-primary" onclick="showSection('addProduct');resetForm()"><i class="fas fa-plus"></i> Додати товар</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-secondary btn-sm" onclick="exportProductsCSV()" title="Експортувати поточний список у CSV"><i class="fas fa-download"></i> Експорт CSV</button>
+        <label class="btn-secondary btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px" title="Імпортувати товари з .gz CSV файлу">
+          <i class="fas fa-upload"></i> Імпорт CSV
+          <input type="file" id="importFileInput" accept=".gz" style="display:none" onchange="importProductsCSV(this)">
+        </label>
+        <button class="btn-primary btn-sm" onclick="showSection('addProduct');resetForm()"><i class="fas fa-plus"></i> Додати товар</button>
+      </div>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
-      <div style="padding:16px 20px;border-bottom:1.5px solid var(--gray-200)">
-        <div class="search-bar" style="margin-bottom:0">
-          <input type="text" class="search-input" id="prodSearch" placeholder="Пошук за назвою, брендом, артикулом..." oninput="filterProductsTable()">
+      <div style="padding:14px 20px;border-bottom:1.5px solid var(--gray-200)">
+        <div class="filter-bar">
+          <input type="text" class="search-input" id="prodSearch" placeholder="Пошук за назвою, брендом, артикулом..." oninput="filterProductsTable()" style="flex:1;min-width:180px">
+          <select id="filterCategory" onchange="filterProductsTable()">
+            <option value="">Всі категорії</option>
+            <option>Освітлення</option><option>Кузов</option><option>Двигун та КПП</option>
+            <option>Підвіска</option><option>Гальма</option><option>Електрика</option>
+            <option>Інтер'єр</option><option>Охолодження</option><option>Паливна система</option><option>Трансмісія</option>
+          </select>
+          <select id="filterCondition" onchange="filterProductsTable()">
+            <option value="">Будь-який стан</option>
+            <option value="new">Новий</option>
+            <option value="used">Б/У</option>
+            <option value="refurbished">Відновлений</option>
+          </select>
+          <select id="filterStock" onchange="filterProductsTable()">
+            <option value="">Будь-який залишок</option>
+            <option value="in">В наявності</option>
+            <option value="out">Немає</option>
+            <option value="low">Закінчується (1 шт)</option>
+          </select>
+          <button onclick="resetTableFilters()" class="btn-secondary btn-sm" title="Скинути фільтри"><i class="fas fa-times"></i> Скинути</button>
         </div>
+      </div>
+      <!-- Bulk action bar -->
+      <div class="bulk-bar" id="bulkBar">
+        <span id="bulkCount" style="font-weight:600;color:var(--blue);white-space:nowrap"></span>
+        <button class="btn-danger btn-sm" onclick="bulkDelete()"><i class="fas fa-trash"></i> Видалити</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="bulkCategory" class="btn-secondary" style="padding:7px 10px;font-size:13px;border-radius:7px">
+            <option value="">Змінити категорію...</option>
+            <option>Освітлення</option><option>Кузов</option><option>Двигун та КПП</option>
+            <option>Підвіска</option><option>Гальма</option><option>Електрика</option>
+            <option>Інтер'єр</option><option>Охолодження</option><option>Паливна система</option><option>Трансмісія</option>
+          </select>
+          <select id="bulkCondition" class="btn-secondary" style="padding:7px 10px;font-size:13px;border-radius:7px">
+            <option value="">Змінити стан...</option>
+            <option value="new">Новий</option>
+            <option value="used">Б/У</option>
+            <option value="refurbished">Відновлений</option>
+          </select>
+          <button class="btn-primary btn-sm" onclick="bulkUpdate()"><i class="fas fa-save"></i> Застосувати</button>
+        </div>
+        <button onclick="clearSelection()" style="margin-left:auto;background:none;border:none;color:var(--gray-500);cursor:pointer;font-size:18px" title="Зняти виділення"><i class="fas fa-times"></i></button>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Фото</th>
+              <th style="width:36px"><input type="checkbox" id="selectAll" class="row-check" onchange="toggleSelectAll(this.checked)"></th>
+              <th style="width:52px">Фото</th>
               <th onclick="sortTable('name')" style="cursor:pointer;user-select:none">Назва <span id="sort-name"></span></th>
               <th>Бренд</th>
               <th onclick="sortTable('category')" style="cursor:pointer;user-select:none">Категорія <span id="sort-category"></span></th>
@@ -350,7 +411,8 @@
           </div>
           <div class="form-field">
             <label>Кількість на складі</label>
-            <input type="number" id="fStock" placeholder="1" min="0" value="1">
+            <input type="number" id="fStock" placeholder="1" min="0" value="1" oninput="checkStockWarning(this)">
+            <div id="stockWarning" style="display:none;color:var(--amber);font-size:12px;margin-top:4px"><i class="fas fa-exclamation-triangle"></i> Товар буде позначений як «Немає в наявності»</div>
           </div>
           <div class="form-field">
             <label>OEM номер</label>
@@ -510,7 +572,7 @@ function showSection(name) {
   document.getElementById('nav-'+name)?.classList.add('active');
 
   if(name==='dashboard') loadDashboard();
-  if(name==='products') loadProducts();
+  if(name==='products') loadProducts(arguments[1]);
   if(name==='orders') loadOrders();
   if(name==='settings') loadAdmins();
 }
@@ -570,14 +632,40 @@ async function loadDashboard() {
 }
 
 // ============ PRODUCTS ============
-async function loadProducts() {
+let selectedIds = new Set();
+
+async function loadProducts(restorePage) {
   try {
     allProducts = await api('/api/products');
-    filteredProducts = [...allProducts];
-    currentPage = 1;
     document.getElementById('prodCount').textContent = `(${allProducts.length})`;
+    applyProductFilter();
+    if (restorePage) { currentPage = restorePage; }
     renderProductsTable();
   } catch(e) { showToast('Помилка завантаження товарів','error'); }
+}
+
+function applyProductFilter() {
+  const q = (document.getElementById('prodSearch')?.value || '').toLowerCase();
+  const cat = document.getElementById('filterCategory')?.value || '';
+  const cond = document.getElementById('filterCondition')?.value || '';
+  const stock = document.getElementById('filterStock')?.value || '';
+  filteredProducts = allProducts.filter(p => {
+    if (q && !((p.name||'').toLowerCase().includes(q)||(p.brand||'').toLowerCase().includes(q)||(p.article||'').toLowerCase().includes(q)||(p.oem||'').toLowerCase().includes(q)||(p.model||'').toLowerCase().includes(q))) return false;
+    if (cat && p.category !== cat) return false;
+    if (cond && p.condition !== cond) return false;
+    if (stock === 'in' && p.stock <= 0) return false;
+    if (stock === 'out' && p.stock > 0) return false;
+    if (stock === 'low' && p.stock !== 1) return false;
+    return true;
+  });
+  if (sortCol) {
+    filteredProducts.sort((a,b) => {
+      let av=a[sortCol], bv=b[sortCol];
+      if(sortCol==='condition'){const o={new:0,refurbished:1,used:2};av=o[av]??3;bv=o[bv]??3;}
+      if(typeof av==='string') return av.localeCompare(bv,'uk')*sortDir;
+      return ((av??0)-(bv??0))*sortDir;
+    });
+  }
 }
 
 let sortCol = null;
@@ -590,27 +678,23 @@ function sortTable(col) {
     const el = document.getElementById('sort-'+c);
     if (el) el.textContent = c === col ? (sortDir === 1 ? ' ↑' : ' ↓') : '';
   });
-  filteredProducts.sort((a, b) => {
-    let av = a[col], bv = b[col];
-    if (col === 'condition') { const o = {new:0,refurbished:1,used:2}; av = o[av]??3; bv = o[bv]??3; }
-    if (typeof av === 'string') return av.localeCompare(bv, 'uk') * sortDir;
-    return ((av ?? 0) - (bv ?? 0)) * sortDir;
-  });
+  applyProductFilter();
   currentPage = 1;
   renderProductsTable();
 }
 
 function filterProductsTable() {
-  const q = document.getElementById('prodSearch').value.toLowerCase();
-  filteredProducts = allProducts.filter(p=>
-    (p.name||'').toLowerCase().includes(q)||
-    (p.brand||'').toLowerCase().includes(q)||
-    (p.article||'').toLowerCase().includes(q)||
-    (p.oem||'').toLowerCase().includes(q)||
-    (p.model||'').toLowerCase().includes(q)
-  );
+  applyProductFilter();
   currentPage = 1;
   renderProductsTable();
+}
+
+function resetTableFilters() {
+  document.getElementById('prodSearch').value = '';
+  document.getElementById('filterCategory').value = '';
+  document.getElementById('filterCondition').value = '';
+  document.getElementById('filterStock').value = '';
+  filterProductsTable();
 }
 
 function renderProductsTable() {
@@ -620,11 +704,19 @@ function renderProductsTable() {
   const page = filteredProducts.slice(start, start+PAGE_SIZE);
 
   if(!total) {
-    tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gray-400)"><i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Нічого не знайдено</td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-400)"><i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>Нічого не знайдено</td></tr>`;
     document.getElementById('pagInfo').textContent='';
     document.getElementById('pagBtns').innerHTML='';
+    const sa = document.getElementById('selectAll');
+    if(sa){sa.checked=false;sa.indeterminate=false;}
     return;
   }
+
+  const pageIds = page.map(p=>p.id);
+  const allChecked = pageIds.length>0 && pageIds.every(id=>selectedIds.has(id));
+  const someChecked = pageIds.some(id=>selectedIds.has(id));
+  const sa = document.getElementById('selectAll');
+  if(sa){sa.checked=allChecked;sa.indeterminate=!allChecked&&someChecked;}
 
   tbody.innerHTML = page.map(p=>{
     const imgHtml = p.image
@@ -633,24 +725,24 @@ function renderProductsTable() {
     const stockCls = p.stock===0?'stock-out':p.stock<2?'stock-low':'stock-ok';
     const stockTxt = p.stock===0?'Немає':p.stock+' шт';
     const isLow = p.stock<2;
+    const compat = (p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand,model:p.model}])
+      .map(c=>`<span class="badge" style="background:rgba(0,35,149,.08);color:var(--blue);display:inline-block;margin:1px">${c.brand}${c.model?' '+c.model:''}</span>`).join('');
     return `<tr class="${isLow?'low-stock-row':''}">
+      <td><input type="checkbox" class="row-check" value="${p.id}" ${selectedIds.has(p.id)?'checked':''} onchange="toggleSelect(${p.id},this.checked)"></td>
       <td>${imgHtml}</td>
       <td>
-        <div class="prod-info">
-          <div>
-            <div class="prod-name">${p.name}</div>
-            ${p.article?`<div class="prod-meta">Арт: ${p.article}</div>`:''}
-          </div>
-        </div>
+        <div class="prod-name">${p.name}</div>
+        ${p.article?`<div class="prod-meta">Арт: ${p.article}</div>`:''}
       </td>
-      <td>${(p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand,model:p.model}]).map(c=>`<span class="badge badge-brand" style="background:rgba(0,35,149,.08);color:var(--blue);display:inline-block;margin:1px">${c.brand}${c.model?' '+c.model:''}</span>`).join('')}</td>
+      <td>${compat}</td>
       <td style="color:var(--gray-600);font-size:13px">${p.category}</td>
       <td><span class="badge ${COND_BADGE[p.condition]||'badge-new'}">${COND_LABELS[p.condition]||p.condition}</span></td>
-      <td style="font-weight:700;color:var(--orange)">${p.price.toLocaleString('de-DE')} €</td>
-      <td><span class="${stockCls}">${stockTxt}</span></td>
+      <td class="inline-edit-cell" onclick="inlineEdit(event,${p.id},'price',${p.price})" title="Клацни для редагування" style="font-weight:700;color:var(--orange)">${p.price.toLocaleString('de-DE')} €</td>
+      <td class="inline-edit-cell" onclick="inlineEdit(event,${p.id},'stock',${p.stock})" title="Клацни для редагування"><span class="${stockCls}">${stockTxt}</span></td>
       <td style="white-space:nowrap">
         <a class="act-btn" href="${location.origin}/#product-${p.id}" target="_blank" title="Переглянути на сайті" style="text-decoration:none"><i class="fas fa-eye"></i></a>
         <button class="act-btn edit" onclick="editProduct(${p.id})" title="Редагувати"><i class="fas fa-pen"></i></button>
+        <button class="act-btn" onclick="duplicateProduct(${p.id})" title="Дублювати" style="border-color:var(--gray-200);color:var(--gray-500)"><i class="fas fa-copy"></i></button>
         <button class="act-btn del" onclick="deleteProduct(${p.id},'${p.name.replace(/'/g,"\\'")}')  " title="Видалити"><i class="fas fa-trash"></i></button>
       </td>
     </tr>`;
@@ -754,7 +846,10 @@ function resetForm() {
   setCompatibility([]);
 }
 
+let savedPage = 1;
+
 async function editProduct(id) {
+  savedPage = currentPage;
   const p = allProducts.find(x=>x.id===id) || await api('/api/products/'+id);
   document.getElementById('editId').value = p.id;
   document.getElementById('fName').value = p.name||'';
@@ -765,6 +860,7 @@ async function editProduct(id) {
   document.getElementById('fCondition').value = p.condition||'';
   document.getElementById('fPrice').value = p.price||0;
   document.getElementById('fStock').value = p.stock||0;
+  checkStockWarning(document.getElementById('fStock'));
   document.getElementById('fOem').value = p.oem||'';
   document.getElementById('fArticle').value = p.article||'';
   document.getElementById('fDesc').value = p.description||'';
@@ -860,7 +956,8 @@ async function submitProduct(e) {
     showToast(id ? 'Товар оновлено!' : 'Товар додано!', 'success');
     btn.disabled = false;
     btn.innerHTML = `<i class="fas fa-save"></i> ${id?'Зберегти зміни':'Зберегти товар'}`;
-    showSection('products');
+    const pageToRestore = id ? savedPage : 1;
+    showSection('products', pageToRestore);
   } catch(err) {
     showToast('Помилка збереження', 'error');
     const btn = document.querySelector('#productForm button[type="submit"]');
@@ -879,6 +976,150 @@ function deleteProduct(id, name) {
     showToast('Товар видалено','success');
     loadProducts();
   };
+}
+
+// ============ SELECTION & BULK ============
+function toggleSelectAll(checked) {
+  const page = filteredProducts.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
+  page.forEach(p => { if(checked) selectedIds.add(p.id); else selectedIds.delete(p.id); });
+  document.querySelectorAll('.row-check').forEach(cb => { if(cb.id!=='selectAll') cb.checked=checked; });
+  updateBulkBar();
+}
+
+function toggleSelect(id, checked) {
+  if(checked) selectedIds.add(id); else selectedIds.delete(id);
+  updateBulkBar();
+  const page = filteredProducts.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
+  const pageIds = page.map(p=>p.id);
+  const sa = document.getElementById('selectAll');
+  if(sa){ sa.checked=pageIds.every(id=>selectedIds.has(id)); sa.indeterminate=!sa.checked&&pageIds.some(id=>selectedIds.has(id)); }
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  document.querySelectorAll('.row-check').forEach(cb=>cb.checked=false);
+  const sa=document.getElementById('selectAll'); if(sa){sa.checked=false;sa.indeterminate=false;}
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const n = selectedIds.size;
+  const bar = document.getElementById('bulkBar');
+  bar.classList.toggle('active', n>0);
+  document.getElementById('bulkCount').textContent = `${n} обрано`;
+}
+
+async function bulkDelete() {
+  const ids = [...selectedIds];
+  if(!ids.length) return;
+  const word = ids.length===1?'товар':`${ids.length} товар${ids.length<5?'и':'ів'}`;
+  if(!confirm(`Видалити ${word}? Цю дію неможливо скасувати.`)) return;
+  const res = await fetch('/api/products/bulk',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
+  const data = await res.json();
+  showToast(`Видалено ${data.deleted} товар${data.deleted===1?'':'ів'}`,'success');
+  selectedIds.clear();
+  updateBulkBar();
+  await loadProducts();
+}
+
+async function bulkUpdate() {
+  const ids = [...selectedIds];
+  if(!ids.length) return showToast('Оберіть товари','error');
+  const changes = {};
+  const cat = document.getElementById('bulkCategory').value;
+  const cond = document.getElementById('bulkCondition').value;
+  if(cat) changes.category = cat;
+  if(cond) changes.condition = cond;
+  if(!Object.keys(changes).length) return showToast('Оберіть що змінити','error');
+  const res = await fetch('/api/products/bulk',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,changes})});
+  const data = await res.json();
+  showToast(`Оновлено ${data.updated} товар${data.updated===1?'':'ів'}`,'success');
+  document.getElementById('bulkCategory').value='';
+  document.getElementById('bulkCondition').value='';
+  selectedIds.clear();
+  updateBulkBar();
+  await loadProducts(currentPage);
+}
+
+// ============ INLINE EDIT ============
+function inlineEdit(event, id, field, currentVal) {
+  const cell = event.currentTarget;
+  if(cell.querySelector('input')) return;
+  const input = document.createElement('input');
+  input.type='number'; input.value=currentVal; input.min=0;
+  input.style.cssText='width:80px;padding:4px 8px;border:1.5px solid var(--blue);border-radius:6px;font-size:13px;font-weight:600;outline:none';
+  cell.innerHTML=''; cell.appendChild(input);
+  input.focus(); input.select();
+  const save = async () => {
+    const val = parseInt(input.value);
+    if(isNaN(val)||val<0){renderProductsTable();return;}
+    await fetch(`/api/products/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:val})});
+    const p = allProducts.find(x=>x.id===id);
+    if(p) p[field]=val;
+    applyProductFilter();
+    renderProductsTable();
+    showToast(field==='price'?`Ціна оновлена: ${val} €`:`Залишок оновлено: ${val} шт`,'success');
+  };
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e=>{
+    if(e.key==='Enter'){e.preventDefault();input.blur();}
+    if(e.key==='Escape'){e.stopPropagation();renderProductsTable();}
+  });
+  input.addEventListener('click', e=>e.stopPropagation());
+}
+
+// ============ DUPLICATE ============
+async function duplicateProduct(id) {
+  const res = await fetch(`/api/products/${id}/duplicate`,{method:'POST'});
+  const p = await res.json();
+  showToast(`Дублікат створено: "${p.name}"`,'success');
+  await loadProducts(1);
+}
+
+// ============ EXPORT CSV ============
+function exportProductsCSV() {
+  const list = filteredProducts.length>0 ? filteredProducts : allProducts;
+  const headers = ['ID','Назва','Категорія','Стан','Ціна','Залишок','OEM','Артикул','Бренд','Модель'];
+  const rows = list.map(p=>[
+    p.id,
+    `"${(p.name||'').replace(/"/g,'""')}"`,
+    p.category||'', p.condition||'', p.price||0, p.stock||0,
+    p.oem||'', p.article||'', p.brand||'', p.model||''
+  ]);
+  const csv = [headers.join(';'),...rows.map(r=>r.join(';'))].join('\n');
+  const blob = new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`olegavto-products-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast(`Експортовано ${list.length} товарів`,'success');
+}
+
+// ============ IMPORT CSV ============
+async function importProductsCSV(input) {
+  const file = input.files[0];
+  if(!file){return;}
+  const count = allProducts.length;
+  if(!confirm(`Імпортувати товари з "${file.name}"?\n\nЦе замінить усі поточні ${count} товарів.\nПродовжити?`)){input.value='';return;}
+  const fd = new FormData();
+  fd.append('file', file);
+  showToast('Імпортування, зачекайте...','');
+  try {
+    const res = await fetch('/api/import',{method:'POST',body:fd});
+    const data = await res.json();
+    if(!res.ok) return showToast(data.error||'Помилка імпорту','error');
+    showToast(`Імпортовано ${data.imported} товарів`,'success');
+    await loadProducts(1);
+  } catch(e) {
+    showToast('Помилка імпорту','error');
+  }
+  input.value='';
+}
+
+// ============ STOCK WARNING ============
+function checkStockWarning(input) {
+  const w = document.getElementById('stockWarning');
+  if(w) w.style.display = parseInt(input.value)===0 ? 'block' : 'none';
 }
 
 // ============ ORDERS ============

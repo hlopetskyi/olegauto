@@ -3,6 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const basicAuth = require('express-basic-auth');
 
 const ADMINS_PATH = path.join(__dirname, 'data', 'admins.json');
@@ -160,6 +161,20 @@ app.post('/api/products', upload.array('images', 5), (req, res) => {
   res.json(product);
 });
 
+app.put('/api/products/bulk', (req, res) => {
+  const { ids, changes } = req.body;
+  if (!Array.isArray(ids) || !ids.length || !changes) return res.status(400).json({ error: 'ids and changes required' });
+  const allowed = ['category', 'condition'];
+  const patch = {};
+  for (const k of allowed) if (changes[k] !== undefined) patch[k] = changes[k];
+  if (!Object.keys(patch).length) return res.status(400).json({ error: 'No valid fields' });
+  let products = readData('products.json');
+  let updated = 0;
+  products = products.map(p => { if (!ids.includes(p.id)) return p; updated++; return { ...p, ...patch }; });
+  writeData('products.json', products);
+  res.json({ ok: true, updated });
+});
+
 app.put('/api/products/:id', upload.array('images', 5), (req, res) => {
   const products = readData('products.json');
   const idx = products.findIndex(p => p.id === parseInt(req.params.id));
@@ -193,11 +208,153 @@ app.put('/api/products/:id', upload.array('images', 5), (req, res) => {
   res.json(updated);
 });
 
+app.delete('/api/products/bulk', (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids required' });
+  let products = readData('products.json');
+  const before = products.length;
+  products = products.filter(p => !ids.includes(p.id));
+  writeData('products.json', products);
+  res.json({ ok: true, deleted: before - products.length });
+});
+
 app.delete('/api/products/:id', (req, res) => {
   let products = readData('products.json');
   products = products.filter(p => p.id !== parseInt(req.params.id));
   writeData('products.json', products);
   res.json({ ok: true });
+});
+
+app.patch('/api/products/:id', (req, res) => {
+  const products = readData('products.json');
+  const idx = products.findIndex(p => p.id === parseInt(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  if (req.body.price !== undefined) products[idx].price = parseInt(req.body.price) || 0;
+  if (req.body.stock !== undefined) products[idx].stock = parseInt(req.body.stock) || 0;
+  writeData('products.json', products);
+  res.json(products[idx]);
+});
+
+app.post('/api/products/:id/duplicate', (req, res) => {
+  const products = readData('products.json');
+  const p = products.find(p => p.id === parseInt(req.params.id));
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  const dup = { ...p, id: nextId(products), name: p.name + ' (копія)', createdAt: new Date().toISOString() };
+  products.unshift(dup);
+  writeData('products.json', products);
+  res.json(dup);
+});
+
+// ============ IMPORT API ============
+const IMPORT_BRAND_PATTERNS = [
+  { brand: 'Renault',  re: /renault|рено/i },
+  { brand: 'Peugeot',  re: /peugeot|пежо/i },
+  { brand: 'Citroën',  re: /citro[eë]n|ситро[єе]/i },
+  { brand: 'Fiat',     re: /\bfiat\b|фіат/i },
+];
+const IMPORT_MODEL_PATTERNS = {
+  'Renault': [
+    {model:'Clio I',re:/clio\s*(i\b|1\b)/i},{model:'Clio II',re:/clio\s*(ii\b|2\b)/i},{model:'Clio III',re:/clio\s*(iii\b|3\b)/i},{model:'Clio IV',re:/clio\s*(iv\b|4\b)/i},{model:'Clio',re:/\bclio\b/i},
+    {model:'Megane I',re:/megane\s*(i\b|1\b)/i},{model:'Megane II',re:/megane\s*(ii\b|2\b)/i},{model:'Megane III',re:/megane\s*(iii\b|3\b)/i},{model:'Megane IV',re:/megane\s*(iv\b|4\b)/i},{model:'Megane',re:/\bmegane\b/i},
+    {model:'Laguna I',re:/laguna\s*(i\b|1\b)/i},{model:'Laguna II',re:/laguna\s*(ii\b|2\b)/i},{model:'Laguna III',re:/laguna\s*(iii\b|3\b)/i},{model:'Laguna',re:/\blaguna\b/i},
+    {model:'Scenic I',re:/scenic\s*(i\b|1\b)/i},{model:'Scenic II',re:/scenic\s*(ii\b|2\b)/i},{model:'Scenic III',re:/scenic\s*(iii\b|3\b)/i},{model:'Scenic',re:/\bscenic\b/i},
+    {model:'Kangoo I',re:/kangoo\s*(i\b|1\b)/i},{model:'Kangoo II',re:/kangoo\s*(ii\b|2\b)/i},{model:'Kangoo',re:/\bkangoo\b/i},
+    {model:'Trafic II',re:/trafic\s*(ii\b|2\b)/i},{model:'Trafic III',re:/trafic\s*(iii\b|3\b)/i},{model:'Trafic',re:/\btrafic\b/i},
+    {model:'Master II',re:/master\s*(ii\b|2\b)/i},{model:'Master III',re:/master\s*(iii\b|3\b)/i},{model:'Master',re:/\bmaster\b/i},
+    {model:'Duster',re:/\bduster\b/i},{model:'Captur',re:/\bcaptur\b/i},{model:'Kadjar',re:/\bkadjar\b/i},{model:'Logan',re:/\blogan\b/i},
+    {model:'Sandero',re:/\bsandero\b/i},{model:'Fluence',re:/\bfluence\b/i},{model:'Twingo',re:/\btwingo\b/i},{model:'Symbol',re:/\bsymbol\b/i},{model:'Koleos',re:/\bkoleos\b/i},
+  ],
+  'Peugeot': [
+    {model:'106',re:/\b106\b/},{model:'107',re:/\b107\b/},{model:'108',re:/\b108\b/},{model:'205',re:/\b205\b/},{model:'206',re:/\b206\b/},{model:'207',re:/\b207\b/},{model:'208',re:/\b208\b/},
+    {model:'306',re:/\b306\b/},{model:'307',re:/\b307\b/},{model:'308',re:/\b308\b/},{model:'406',re:/\b406\b/},{model:'407',re:/\b407\b/},{model:'508',re:/\b508\b/},
+    {model:'2008',re:/\b2008\b/},{model:'3008',re:/\b3008\b/},{model:'5008',re:/\b5008\b/},{model:'Partner',re:/\bpartner\b/i},{model:'Expert',re:/\bexpert\b/i},{model:'Boxer',re:/\bboxer\b/i},
+  ],
+  'Citroën': [
+    {model:'C1',re:/\bc1\b/i},{model:'C2',re:/\bc2\b/i},{model:'C3 Aircross',re:/c3\s*aircross/i},{model:'C3 Picasso',re:/c3\s*picasso/i},{model:'C3',re:/\bc3\b/i},
+    {model:'C4 Grand Picasso',re:/c4\s*(grand\s*picasso|grand)/i},{model:'C4 Picasso',re:/c4\s*picasso/i},{model:'C4 Cactus',re:/c4\s*cactus/i},{model:'C4',re:/\bc4\b/i},
+    {model:'C5',re:/\bc5\b/i},{model:'C6',re:/\bc6\b/i},{model:'Berlingo',re:/\bberlingo\b/i},{model:'Jumpy',re:/\bjumpy\b/i},{model:'Jumper',re:/\bjumper\b/i},
+    {model:'Saxo',re:/\bsaxo\b/i},{model:'Xantia',re:/\bxantia\b/i},{model:'Xsara Picasso',re:/xsara\s*picasso/i},{model:'Xsara',re:/\bxsara\b/i},
+  ],
+  'Fiat': [
+    {model:'500',re:/\b500\b/},{model:'Doblo',re:/\bdoblo\b/i},{model:'Ducato',re:/\bducato\b/i},{model:'Punto',re:/\bpunto\b/i},{model:'Panda',re:/\bpanda\b/i},
+    {model:'Bravo',re:/\bbravo\b/i},{model:'Stilo',re:/\bstilo\b/i},{model:'Tipo',re:/\btipo\b/i},{model:'Fiorino',re:/\bfiorino\b/i},{model:'Scudo',re:/\bscudo\b/i},
+  ],
+};
+const IMPORT_CATEGORY_PATTERNS = [
+  {cat:'Освітлення',re:/фар[аиу]|ліхтар|lamp|light|фонар|headlight|taillight/i},
+  {cat:'Кузов',re:/бампер|крило|капот|двер|hood|bumper|fender|door|wing|порог|панел|решітк/i},
+  {cat:'Двигун та КПП',re:/двигун|мотор|кпп|коробк|engine|gearbox|поршень|клапан|голівк|блок цил/i},
+  {cat:'Підвіска',re:/підвіск|важіл|стійк|амортиз|пружин|bearing|suspension|arm|strut|рульов/i},
+  {cat:'Гальма',re:/гальм|колодк|диск|супорт|brake|caliper/i},
+  {cat:'Електрика',re:/електр|генерат|стартер|датчик|sensor|реле|проводк|signal|сигнал/i},
+  {cat:"Інтер'єр",re:/салон|сидін|килим|ручк|interior|panel|торпед/i},
+  {cat:'Охолодження',re:/радіат|охолод|термостат|помпа|cooling|radiator/i},
+  {cat:'Паливна система',re:/паливн|форсунк|насос|injector|fuel|pump|карбюр/i},
+  {cat:'Трансмісія',re:/трансміс|привод|шрус|піввісь|driveshaft|transmission/i},
+];
+function importDetectCategory(name) {
+  for (const {cat,re} of IMPORT_CATEGORY_PATTERNS) if (re.test(name)) return cat;
+  return 'Кузов';
+}
+function importDetectCompatibility(name) {
+  const compat = [];
+  for (const {brand,re} of IMPORT_BRAND_PATTERNS) {
+    if (re.test(name)) {
+      const matched = (IMPORT_MODEL_PATTERNS[brand]||[]).filter(m=>m.re.test(name)).map(m=>m.model);
+      if (matched.length) matched.forEach(model=>compat.push({brand,model}));
+      else compat.push({brand,model:''});
+    }
+  }
+  return compat;
+}
+function importDetectCondition(name) {
+  if (/нов[ий|а|е]|new\b/i.test(name)) return 'new';
+  return 'used';
+}
+
+const importUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+
+app.post('/api/import', dynamicAdminAuth, importUpload.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Файл не завантажено' });
+    const raw = zlib.gunzipSync(req.file.buffer).toString('utf8').replace(/^﻿/, '');
+    const lines = raw.split('\n').filter(l => l.trim());
+    const products = [];
+    const seen = new Set();
+    let id = 1;
+    for (const line of lines) {
+      const cols = line.split(';');
+      if (cols.length < 4) continue;
+      const supplierBrand = (cols[0]||'').trim();
+      const article       = (cols[1]||'').trim();
+      const name          = (cols[2]||'').trim();
+      const price         = parseFloat((cols[3]||'0').replace(',','.')) || 0;
+      const stock         = parseInt(cols[4]) || 0;
+      const imagesRaw     = (cols[6]||'').trim();
+      const oem           = (cols[8]||'').trim();
+      if (!name || !price) continue;
+      const dedupKey = oem || name;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      const imageList = imagesRaw ? imagesRaw.split(',').map(u=>u.trim()).filter(Boolean) : [];
+      const compat = importDetectCompatibility(name);
+      products.push({
+        id: id++, name,
+        brand: compat[0]?.brand||'', model: compat[0]?.model||'',
+        compatibility: compat,
+        category: importDetectCategory(name),
+        condition: importDetectCondition(name),
+        price, stock, oem, article, supplierBrand,
+        images: imageList, image: imageList[0]||null,
+        description: '', yearFrom: '', yearTo: '',
+        createdAt: new Date().toISOString()
+      });
+    }
+    writeData('products.json', products);
+    res.json({ ok: true, imported: products.length, total: lines.length });
+  } catch(e) {
+    res.status(500).json({ error: 'Помилка парсингу: ' + e.message });
+  }
 });
 
 // ============ ORDERS API ============
@@ -215,6 +372,22 @@ app.post('/api/orders', (req, res) => {
   };
   orders.unshift(order);
   writeData('orders.json', orders);
+
+  // Decrease stock for each ordered item
+  const items = order.items || [];
+  if (items.length) {
+    const products = readData('products.json');
+    let changed = false;
+    items.forEach(item => {
+      const idx = products.findIndex(p => p.id === item.id);
+      if (idx !== -1 && products[idx].stock > 0) {
+        products[idx].stock = Math.max(0, products[idx].stock - (item.qty || 1));
+        changed = true;
+      }
+    });
+    if (changed) writeData('products.json', products);
+  }
+
   res.json(order);
 });
 
