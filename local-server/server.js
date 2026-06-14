@@ -9,12 +9,20 @@ const ADMINS_PATH = path.join(__dirname, 'data', 'admins.json');
 
 function loadAdmins() {
   if (fs.existsSync(ADMINS_PATH)) {
-    try { return JSON.parse(fs.readFileSync(ADMINS_PATH, 'utf8')); } catch {}
+    try {
+      const raw = JSON.parse(fs.readFileSync(ADMINS_PATH, 'utf8'));
+      // Migrate old format {"login":"pass"} -> {"login":{"name":"login","password":"pass"}}
+      let migrated = false;
+      for (const [k, v] of Object.entries(raw)) {
+        if (typeof v === 'string') { raw[k] = { name: k, password: v }; migrated = true; }
+      }
+      if (migrated) fs.writeFileSync(ADMINS_PATH, JSON.stringify(raw, null, 2));
+      return raw;
+    } catch {}
   }
-  // Migrate from .env on first run
   const defaultUser = process.env.ADMIN_USER || 'admin';
   const defaultPass = process.env.ADMIN_PASS || 'admin';
-  const admins = { [defaultUser]: defaultPass };
+  const admins = { [defaultUser]: { name: defaultUser, password: defaultPass } };
   fs.mkdirSync(path.dirname(ADMINS_PATH), { recursive: true });
   fs.writeFileSync(ADMINS_PATH, JSON.stringify(admins, null, 2));
   return admins;
@@ -27,11 +35,9 @@ function saveAdmins(admins) {
 let admins = loadAdmins();
 
 function dynamicAdminAuth(req, res, next) {
-  const handler = basicAuth({
-    users: admins,
-    challenge: true,
-    realm: 'OlegAuto Admin',
-  });
+  const users = {};
+  for (const [k, v] of Object.entries(admins)) users[k] = v.password;
+  const handler = basicAuth({ users, challenge: true, realm: 'OlegAuto Admin' });
   handler(req, res, next);
 }
 
@@ -237,25 +243,26 @@ app.get('/api/stats', (req, res) => {
 
 // ============ ADMINS API ============
 app.get('/api/admins', dynamicAdminAuth, (req, res) => {
-  res.json(Object.keys(admins));
+  res.json(Object.entries(admins).map(([username, v]) => ({ username, name: v.name })));
 });
 
 app.post('/api/admins', dynamicAdminAuth, (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'Логін і пароль обовʼязкові' });
+  const { username, password, name } = req.body;
+  if (!username || !password || !name) return res.status(400).json({ error: 'Імʼя, логін і пароль обовʼязкові' });
   if (password.length < 4) return res.status(400).json({ error: 'Пароль мінімум 4 символи' });
   if (admins[username]) return res.status(400).json({ error: 'Такий логін вже існує' });
-  admins[username] = password;
+  admins[username] = { name, password };
   saveAdmins(admins);
   res.json({ ok: true });
 });
 
 app.put('/api/admins/:username', dynamicAdminAuth, (req, res) => {
   const { username } = req.params;
-  const { password } = req.body;
+  const { password, name } = req.body;
   if (!admins[username]) return res.status(404).json({ error: 'Адміна не знайдено' });
-  if (!password || password.length < 4) return res.status(400).json({ error: 'Пароль мінімум 4 символи' });
-  admins[username] = password;
+  if (password && password.length < 4) return res.status(400).json({ error: 'Пароль мінімум 4 символи' });
+  if (name) admins[username].name = name;
+  if (password) admins[username].password = password;
   saveAdmins(admins);
   res.json({ ok: true });
 });

@@ -427,16 +427,45 @@
 
     <div class="card" style="margin-bottom:24px">
       <div style="font-weight:600;margin-bottom:16px;font-size:15px">Список адміністраторів</div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Логін</th><th style="width:220px">Новий пароль</th><th style="width:120px"></th></tr></thead>
-          <tbody id="adminsTableBody"><tr><td colspan="3" style="text-align:center;color:var(--gray-400)">Завантаження...</td></tr></tbody>
-        </table>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <!-- Admin list -->
+        <div style="min-width:200px">
+          <div id="adminsList" style="display:flex;flex-direction:column;gap:8px">
+            <div style="color:var(--gray-400)">Завантаження...</div>
+          </div>
+        </div>
+        <!-- Edit panel -->
+        <div style="flex:1;min-width:280px">
+          <div id="adminEditPanel" style="display:none">
+            <div style="font-weight:600;margin-bottom:14px">Редагувати: <span id="editAdminTitle" style="color:var(--primary)"></span></div>
+            <div class="form-group">
+              <label class="form-label">Імʼя</label>
+              <input type="text" class="form-control" id="edit-admin-name" placeholder="Імʼя адміністратора">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Логін</label>
+              <input type="text" class="form-control" id="edit-admin-login" disabled style="background:var(--gray-50,#f9fafb);color:var(--gray-500,#6b7280)">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Новий пароль <span style="color:var(--gray-400);font-weight:400">(залиш порожнім щоб не змінювати)</span></label>
+              <input type="password" class="form-control" id="edit-admin-pass" placeholder="мінімум 4 символи" autocomplete="new-password">
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn-primary" onclick="saveAdminEdit()"><i class="fas fa-save"></i> Зберегти</button>
+              <button class="btn-danger" onclick="deleteAdminCurrent()"><i class="fas fa-trash"></i> Видалити</button>
+            </div>
+          </div>
+          <div id="adminEditEmpty" style="color:var(--gray-400)">Оберіть адміна зліва для редагування</div>
+        </div>
       </div>
     </div>
 
     <div class="card" style="max-width:420px">
       <div style="font-weight:600;margin-bottom:16px;font-size:15px">Додати адміністратора</div>
+      <div class="form-group">
+        <label class="form-label">Імʼя</label>
+        <input type="text" class="form-control" id="new-admin-name" placeholder="Імʼя адміністратора" autocomplete="off">
+      </div>
       <div class="form-group">
         <label class="form-label">Логін</label>
         <input type="text" class="form-control" id="new-admin-user" placeholder="новий_логін" autocomplete="off">
@@ -970,58 +999,88 @@ function getStatusCls(s) {
   return m[s]||'status-new';
 }
 
+let selectedAdminUsername = null;
+
 async function loadAdmins() {
   const res = await fetch('/api/admins');
-  const users = await res.json();
-  const tbody = document.getElementById('adminsTableBody');
-  tbody.innerHTML = users.map(u => `
-    <tr>
-      <td><strong>${u}</strong></td>
-      <td><input type="password" class="form-control" id="pass-${u}" placeholder="новий пароль" autocomplete="new-password" style="margin:0"></td>
-      <td style="display:flex;gap:8px;padding:10px 12px">
-        <button class="btn-primary btn-sm" onclick="changeAdminPass('${u}')"><i class="fas fa-save"></i></button>
-        <button class="btn-danger btn-sm" onclick="deleteAdmin('${u}')"><i class="fas fa-trash"></i></button>
-      </td>
-    </tr>`).join('');
+  const admins = await res.json();
+  const list = document.getElementById('adminsList');
+  list.innerHTML = admins.map(a => `
+    <div onclick="selectAdmin('${a.username}', '${(a.name||'').replace(/'/g,"\\'")}', this)"
+         style="padding:10px 14px;border-radius:8px;cursor:pointer;border:2px solid var(--gray-200,#e5e7eb);
+                background:#fff;transition:all 0.15s" class="admin-card" data-username="${a.username}">
+      <div style="font-weight:600">${a.name || a.username}</div>
+      <div style="font-size:12px;color:var(--gray-400)">${a.username}</div>
+    </div>`).join('');
+  // re-select if still in list
+  if (selectedAdminUsername) {
+    const card = list.querySelector(`[data-username="${selectedAdminUsername}"]`);
+    if (card) card.style.borderColor = 'var(--primary,#2563eb)';
+  }
 }
 
-async function addAdmin() {
-  const username = document.getElementById('new-admin-user').value.trim();
-  const password = document.getElementById('new-admin-pass').value;
-  if (!username || !password) return showToast('Заповніть всі поля', 'error');
-  const res = await fetch('/api/admins', {
-    method: 'POST',
+function selectAdmin(username, name, cardEl) {
+  selectedAdminUsername = username;
+  document.querySelectorAll('.admin-card').forEach(c => c.style.borderColor = 'var(--gray-200,#e5e7eb)');
+  cardEl.style.borderColor = 'var(--primary,#2563eb)';
+  document.getElementById('editAdminTitle').textContent = name || username;
+  document.getElementById('edit-admin-name').value = name || '';
+  document.getElementById('edit-admin-login').value = username;
+  document.getElementById('edit-admin-pass').value = '';
+  document.getElementById('adminEditPanel').style.display = 'block';
+  document.getElementById('adminEditEmpty').style.display = 'none';
+}
+
+async function saveAdminEdit() {
+  if (!selectedAdminUsername) return;
+  const name = document.getElementById('edit-admin-name').value.trim();
+  const password = document.getElementById('edit-admin-pass').value;
+  if (!name) return showToast('Введіть імʼя', 'error');
+  if (password && password.length < 4) return showToast('Пароль мінімум 4 символи', 'error');
+  const body = { name };
+  if (password) body.password = password;
+  const res = await fetch(`/api/admins/${encodeURIComponent(selectedAdminUsername)}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify(body)
   });
   const data = await res.json();
   if (!res.ok) return showToast(data.error || 'Помилка', 'error');
-  showToast(`Адміна "${username}" додано`, 'success');
-  document.getElementById('new-admin-user').value = '';
-  document.getElementById('new-admin-pass').value = '';
+  showToast('Збережено', 'success');
+  document.getElementById('edit-admin-pass').value = '';
+  document.getElementById('editAdminTitle').textContent = name;
   loadAdmins();
 }
 
-async function changeAdminPass(username) {
-  const password = document.getElementById(`pass-${username}`).value;
-  if (!password) return showToast('Введіть новий пароль', 'error');
-  const res = await fetch(`/api/admins/${encodeURIComponent(username)}`, {
-    method: 'PUT',
+async function deleteAdminCurrent() {
+  if (!selectedAdminUsername) return;
+  if (!confirm(`Видалити адміна "${selectedAdminUsername}"?`)) return;
+  const res = await fetch(`/api/admins/${encodeURIComponent(selectedAdminUsername)}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) return showToast(data.error || 'Помилка', 'error');
+  showToast('Адміна видалено', 'success');
+  selectedAdminUsername = null;
+  document.getElementById('adminEditPanel').style.display = 'none';
+  document.getElementById('adminEditEmpty').style.display = 'block';
+  loadAdmins();
+}
+
+async function addAdmin() {
+  const name = document.getElementById('new-admin-name').value.trim();
+  const username = document.getElementById('new-admin-user').value.trim();
+  const password = document.getElementById('new-admin-pass').value;
+  if (!name || !username || !password) return showToast('Заповніть всі поля', 'error');
+  const res = await fetch('/api/admins', {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password })
+    body: JSON.stringify({ name, username, password })
   });
   const data = await res.json();
   if (!res.ok) return showToast(data.error || 'Помилка', 'error');
-  showToast(`Пароль для "${username}" змінено`, 'success');
-  document.getElementById(`pass-${username}`).value = '';
-}
-
-async function deleteAdmin(username) {
-  if (!confirm(`Видалити адміна "${username}"?`)) return;
-  const res = await fetch(`/api/admins/${encodeURIComponent(username)}`, { method: 'DELETE' });
-  const data = await res.json();
-  if (!res.ok) return showToast(data.error || 'Помилка', 'error');
-  showToast(`Адміна "${username}" видалено`, 'success');
+  showToast(`Адміна "${name}" додано`, 'success');
+  document.getElementById('new-admin-name').value = '';
+  document.getElementById('new-admin-user').value = '';
+  document.getElementById('new-admin-pass').value = '';
   loadAdmins();
 }
 
