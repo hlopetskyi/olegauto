@@ -87,8 +87,14 @@ app.get('/api/products', (req, res) => {
   const { brand, category, condition, inStock, search, sort, carBrand, carModel } = req.query;
 
   if (brand) products = products.filter(p => p.brand === brand);
-  if (carBrand) products = products.filter(p => (p.carBrand || '').toLowerCase() === carBrand.toLowerCase());
-  if (carModel) products = products.filter(p => (p.carModel || '').toLowerCase() === carModel.toLowerCase());
+  if (carBrand) products = products.filter(p => {
+    const compat = p.compatibility && p.compatibility.length ? p.compatibility : [{brand: p.brand, model: p.model}];
+    return compat.some(c => (c.brand || '').toLowerCase() === carBrand.toLowerCase());
+  });
+  if (carModel) products = products.filter(p => {
+    const compat = p.compatibility && p.compatibility.length ? p.compatibility : [{brand: p.brand, model: p.model}];
+    return compat.some(c => (c.model || '').toLowerCase() === carModel.toLowerCase());
+  });
   if (category) products = products.filter(p => p.category === category);
   if (condition && condition !== 'all') products = products.filter(p => p.condition === condition);
   if (inStock === 'true') products = products.filter(p => p.stock > 0);
@@ -118,11 +124,13 @@ app.get('/api/products/:id', (req, res) => {
 
 app.post('/api/products', upload.single('image'), (req, res) => {
   const products = readData('products.json');
+  const compatibility = JSON.parse(req.body.compatibility || '[]');
   const product = {
     id: nextId(products),
     name: req.body.name,
-    brand: req.body.brand,
-    model: req.body.model,
+    brand: compatibility[0]?.brand || req.body.brand || '',
+    model: compatibility[0]?.model || req.body.model || '',
+    compatibility,
     yearFrom: req.body.yearFrom || '',
     yearTo: req.body.yearTo || '',
     category: req.body.category,
@@ -144,11 +152,13 @@ app.put('/api/products/:id', upload.single('image'), (req, res) => {
   const products = readData('products.json');
   const idx = products.findIndex(p => p.id === parseInt(req.params.id));
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  const updCompatibility = JSON.parse(req.body.compatibility || '[]');
   const updated = {
     ...products[idx],
     name: req.body.name,
-    brand: req.body.brand,
-    model: req.body.model,
+    brand: updCompatibility[0]?.brand || req.body.brand || '',
+    model: updCompatibility[0]?.model || req.body.model || '',
+    compatibility: updCompatibility,
     yearFrom: req.body.yearFrom || '',
     yearTo: req.body.yearTo || '',
     category: req.body.category,

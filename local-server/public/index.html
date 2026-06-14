@@ -806,10 +806,10 @@ function renderProductCard(p) {
   <div class="product-body" style="display:flex;flex-direction:column;height:calc(100% - 180px)">
     <div class="product-badges">
       <span class="badge ${COND_BADGE[p.condition]||'badge-new'}">${COND_LABELS[p.condition]||p.condition}</span>
-      <span class="badge badge-brand">${p.brand}</span>
+      ${(p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand}]).map(c=>`<span class="badge badge-brand">${c.brand}</span>`).join('')}
     </div>
     <div class="product-name">${p.name}</div>
-    <div class="product-meta">${p.model}${p.yearFrom?` · ${p.yearFrom}–${p.yearTo||'...'}`:''}</div>
+    <div class="product-meta">${(p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand,model:p.model}]).map(c=>c.model?`${c.brand} ${c.model}`:c.brand).join(', ')}${p.yearFrom?` · ${p.yearFrom}–${p.yearTo||'...'}`:''}</div>
     ${p.article?`<div class="product-article">Арт: ${p.article}</div>`:''}
     <div style="margin-top:auto">
       ${stockHtml}
@@ -848,7 +848,7 @@ async function loadProductDetail(id) {
   <div class="detail-info">
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <span class="badge ${COND_BADGE[p.condition]||'badge-new'}">${COND_LABELS[p.condition]||p.condition}</span>
-      <span class="badge badge-brand">${p.brand}</span>
+      ${(p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand}]).map(c=>`<span class="badge badge-brand">${c.brand}</span>`).join('')}
       <span class="badge badge-category">${p.category}</span>
     </div>
     <h1>${p.name}</h1>
@@ -857,7 +857,7 @@ async function loadProductDetail(id) {
     <div class="detail-attrs">
       ${p.oem?`<div class="attr-row"><span class="attr-label">OEM номер</span><span class="attr-value">${p.oem}</span></div>`:''}
       ${p.article?`<div class="attr-row"><span class="attr-label">Артикул</span><span class="attr-value">${p.article}</span></div>`:''}
-      ${p.model?`<div class="attr-row"><span class="attr-label">Модель авто</span><span class="attr-value">${p.brand} ${p.model}</span></div>`:''}
+      ${(()=>{const compat=p.compatibility&&p.compatibility.length?p.compatibility:(p.brand?[{brand:p.brand,model:p.model}]:[]);return compat.length?`<div class="attr-row"><span class="attr-label">Сумісні авто</span><span class="attr-value">${compat.map(c=>c.model?`${c.brand} ${c.model}`:c.brand).join('<br>')}</span></div>`:''})()}
       ${p.yearFrom?`<div class="attr-row"><span class="attr-label">Роки випуску</span><span class="attr-value">${p.yearFrom}–${p.yearTo||'...'}</span></div>`:''}
       <div class="attr-row"><span class="attr-label">Стан</span><span class="attr-value">${COND_LABELS[p.condition]||p.condition}</span></div>
       <div class="attr-row"><span class="attr-label">На складі</span><span class="attr-value">${p.stock} шт</span></div>

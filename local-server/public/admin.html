@@ -297,19 +297,10 @@
             <label>Назва товару</label>
             <input type="text" id="fName" placeholder="Фара права Renault Clio IV 2012–2019" required>
           </div>
-          <div class="form-field required">
-            <label>Бренд</label>
-            <select id="fBrand" required>
-              <option value="">— оберіть бренд —</option>
-              <option value="Renault">Renault</option>
-              <option value="Peugeot">Peugeot</option>
-              <option value="Citroën">Citroën</option>
-              <option value="Fiat">Fiat</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label>Модель авто</label>
-            <input type="text" id="fModel" placeholder="Clio IV">
+          <div class="form-field form-full">
+            <label>Сумісні авто <span style="color:var(--gray-400);font-weight:400;font-size:12px">(можна додати кілька)</span></label>
+            <div id="compatList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+            <button type="button" class="btn-secondary btn-sm" onclick="addCompatRow()"><i class="fas fa-plus"></i> Додати авто</button>
           </div>
           <div class="form-field">
             <label>Рік від</label>
@@ -576,7 +567,7 @@ function renderProductsTable() {
           </div>
         </div>
       </td>
-      <td><span class="badge badge-brand" style="background:rgba(0,35,149,.08);color:var(--blue)">${p.brand}</span></td>
+      <td>${(p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand,model:p.model}]).map(c=>`<span class="badge badge-brand" style="background:rgba(0,35,149,.08);color:var(--blue);display:inline-block;margin:1px">${c.brand}${c.model?' '+c.model:''}</span>`).join('')}</td>
       <td style="color:var(--gray-600);font-size:13px">${p.category}</td>
       <td><span class="badge ${COND_BADGE[p.condition]||'badge-new'}">${COND_LABELS[p.condition]||p.condition}</span></td>
       <td style="font-weight:700;color:var(--orange)">${p.price.toLocaleString('de-DE')} €</td>
@@ -608,20 +599,57 @@ function goPage(n) {
 }
 
 // ============ ADD / EDIT ============
+const BRANDS = ['Renault','Peugeot','Citroën','Fiat'];
+
+function brandOptions(selected) {
+  return BRANDS.map(b => `<option value="${b}"${b===selected?' selected':''}>${b}</option>`).join('');
+}
+
+function addCompatRow(brand='', model='') {
+  const list = document.getElementById('compatList');
+  const row = document.createElement('div');
+  row.className = 'compat-row';
+  row.style = 'display:flex;gap:8px;align-items:center';
+  row.innerHTML = `
+    <select class="form-control compat-brand" style="flex:0 0 160px">
+      <option value="">— бренд —</option>
+      ${brandOptions(brand)}
+    </select>
+    <input type="text" class="form-control compat-model" placeholder="Модель (напр. Clio IV)" value="${model}" style="flex:1">
+    <button type="button" onclick="this.closest('.compat-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:4px 8px"><i class="fas fa-times"></i></button>`;
+  list.appendChild(row);
+}
+
+function getCompatibility() {
+  return Array.from(document.querySelectorAll('.compat-row')).map(row => ({
+    brand: row.querySelector('.compat-brand').value,
+    model: row.querySelector('.compat-model').value.trim(),
+  })).filter(c => c.brand || c.model);
+}
+
+function setCompatibility(compat) {
+  document.getElementById('compatList').innerHTML = '';
+  if (compat && compat.length) {
+    compat.forEach(c => addCompatRow(c.brand, c.model));
+  } else {
+    addCompatRow();
+  }
+}
+
 function resetForm() {
   document.getElementById('editId').value='';
   document.getElementById('productForm').reset();
   document.getElementById('formTitle').textContent='Додати товар';
   document.getElementById('submitBtnText').textContent='Зберегти товар';
   document.getElementById('imgPreview').innerHTML='<i class="fas fa-image" style="font-size:28px;color:var(--gray-300)"></i>';
+  setCompatibility([]);
 }
 
 async function editProduct(id) {
   const p = allProducts.find(x=>x.id===id) || await api('/api/products/'+id);
   document.getElementById('editId').value = p.id;
   document.getElementById('fName').value = p.name||'';
-  document.getElementById('fBrand').value = p.brand||'';
-  document.getElementById('fModel').value = p.model||'';
+  setCompatibility(p.compatibility && p.compatibility.length ? p.compatibility : [{brand: p.brand||'', model: p.model||''}]);
   document.getElementById('fYearFrom').value = p.yearFrom||'';
   document.getElementById('fYearTo').value = p.yearTo||'';
   document.getElementById('fCategory').value = p.category||'';
@@ -654,8 +682,7 @@ async function submitProduct(e) {
   const id = document.getElementById('editId').value;
   const fd = new FormData();
   fd.append('name', document.getElementById('fName').value);
-  fd.append('brand', document.getElementById('fBrand').value);
-  fd.append('model', document.getElementById('fModel').value);
+  fd.append('compatibility', JSON.stringify(getCompatibility()));
   fd.append('yearFrom', document.getElementById('fYearFrom').value);
   fd.append('yearTo', document.getElementById('fYearTo').value);
   fd.append('category', document.getElementById('fCategory').value);
