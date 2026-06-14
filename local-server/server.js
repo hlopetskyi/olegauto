@@ -4,18 +4,27 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const basicAuth = require('express-basic-auth');
+const bcrypt = require('bcryptjs');
 
 const ADMINS_PATH = path.join(__dirname, 'data', 'admins.json');
+const LOG_PATH    = path.join(__dirname, 'data', 'access.log');
+const BCRYPT_ROUNDS = 10;
 
 function loadAdmins() {
   if (fs.existsSync(ADMINS_PATH)) {
     try {
       const raw = JSON.parse(fs.readFileSync(ADMINS_PATH, 'utf8'));
-      // Migrate old format {"login":"pass"} -> {"login":{"name":"login","password":"pass"}}
       let migrated = false;
       for (const [k, v] of Object.entries(raw)) {
-        if (typeof v === 'string') { raw[k] = { name: k, password: v }; migrated = true; }
+        // old format: {login: "pass"}
+        if (typeof v === 'string') {
+          raw[k] = { name: k, password: bcrypt.hashSync(v, BCRYPT_ROUNDS) };
+          migrated = true;
+        // new format but password not yet hashed
+        } else if (v.password && !v.password.startsWith('$2')) {
+          raw[k].password = bcrypt.hashSync(v.password, BCRYPT_ROUNDS);
+          migrated = true;
+        }
       }
       if (migrated) fs.writeFileSync(ADMINS_PATH, JSON.stringify(raw, null, 2));
       return raw;
@@ -23,7 +32,7 @@ function loadAdmins() {
   }
   const defaultUser = process.env.ADMIN_USER || 'admin';
   const defaultPass = process.env.ADMIN_PASS || 'admin';
-  const admins = { [defaultUser]: { name: defaultUser, password: defaultPass } };
+  const admins = { [defaultUser]: { name: defaultUser, password: bcrypt.hashSync(defaultPass, BCRYPT_ROUNDS) } };
   fs.mkdirSync(path.dirname(ADMINS_PATH), { recursive: true });
   fs.writeFileSync(ADMINS_PATH, JSON.stringify(admins, null, 2));
   return admins;
@@ -35,11 +44,76 @@ function saveAdmins(admins) {
 
 let admins = loadAdmins();
 
+// ── Brute-force protection ──────────────────────────────────────────────────
+const loginAttempts = new Map(); // ip -> {count, resetAt}
+const MAX_ATTEMPTS  = 10;
+const WINDOW_MS     = 15 * 60 * 1000;
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const e = loginAttempts.get(ip);
+  if (!e || now > e.resetAt) return true;
+  return e.count < MAX_ATTEMPTS;
+}
+
+function recordFail(ip, username) {
+  const now = Date.now();
+  const e = loginAttempts.get(ip) || { count: 0, resetAt: now + WINDOW_MS };
+  if (now > e.resetAt) { e.count = 0; e.resetAt = now + WINDOW_MS; }
+  e.count++;
+  loginAttempts.set(ip, e);
+  appendLog(ip, username, false);
+}
+
+function recordOk(ip, username) {
+  loginAttempts.delete(ip);
+  appendLog(ip, username, true);
+}
+
+function appendLog(ip, username, success) {
+  const line = `${new Date().toISOString()} | ${success ? 'OK  ' : 'FAIL'} | ${ip} | ${username}\n`;
+  try { fs.appendFileSync(LOG_PATH, line); } catch {}
+}
+
+// ── Auth middleware ─────────────────────────────────────────────────────────
 function dynamicAdminAuth(req, res, next) {
-  const users = {};
-  for (const [k, v] of Object.entries(admins)) users[k] = v.password;
-  const handler = basicAuth({ users, challenge: true, realm: 'OlegAuto Admin' });
-  handler(req, res, next);
+  const ip = req.ip || req.connection?.remoteAddress || '?';
+
+  if (!checkRateLimit(ip)) {
+    return res.status(429).send('Забагато спроб входу. Спробуйте через 15 хвилин.');
+  }
+
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Basic ')) {
+    res.set('WWW-Authenticate', 'Basic realm="OlegAuto Admin", charset="UTF-8"');
+    return res.status(401).end();
+  }
+
+  const decoded  = Buffer.from(header.slice(6), 'base64').toString('utf8');
+  const colon    = decoded.indexOf(':');
+  if (colon < 0) {
+    res.set('WWW-Authenticate', 'Basic realm="OlegAuto Admin"');
+    return res.status(401).end();
+  }
+  const username = decoded.slice(0, colon);
+  const password = decoded.slice(colon + 1);
+
+  const admin = admins[username];
+  if (!admin) {
+    recordFail(ip, username);
+    res.set('WWW-Authenticate', 'Basic realm="OlegAuto Admin"');
+    return res.status(401).end();
+  }
+
+  bcrypt.compare(password, admin.password, (err, match) => {
+    if (err || !match) {
+      recordFail(ip, username);
+      res.set('WWW-Authenticate', 'Basic realm="OlegAuto Admin"');
+      return res.status(401).end();
+    }
+    recordOk(ip, username);
+    next();
+  });
 }
 
 const app = express();
@@ -446,7 +520,7 @@ app.post('/api/admins', dynamicAdminAuth, (req, res) => {
   if (!username || !password || !name) return res.status(400).json({ error: 'Імʼя, логін і пароль обовʼязкові' });
   if (password.length < 4) return res.status(400).json({ error: 'Пароль мінімум 4 символи' });
   if (admins[username]) return res.status(400).json({ error: 'Такий логін вже існує' });
-  admins[username] = { name, password };
+  admins[username] = { name, password: bcrypt.hashSync(password, BCRYPT_ROUNDS) };
   saveAdmins(admins);
   res.json({ ok: true });
 });
@@ -457,9 +531,17 @@ app.put('/api/admins/:username', dynamicAdminAuth, (req, res) => {
   if (!admins[username]) return res.status(404).json({ error: 'Адміна не знайдено' });
   if (password && password.length < 4) return res.status(400).json({ error: 'Пароль мінімум 4 символи' });
   if (name) admins[username].name = name;
-  if (password) admins[username].password = password;
+  if (password) admins[username].password = bcrypt.hashSync(password, BCRYPT_ROUNDS);
   saveAdmins(admins);
   res.json({ ok: true });
+});
+
+app.get('/api/admins/log', dynamicAdminAuth, (req, res) => {
+  try {
+    const raw = fs.existsSync(LOG_PATH) ? fs.readFileSync(LOG_PATH, 'utf8') : '';
+    const lines = raw.trim().split('\n').filter(Boolean).reverse().slice(0, 200);
+    res.json(lines);
+  } catch { res.json([]); }
 });
 
 app.delete('/api/admins/:username', dynamicAdminAuth, (req, res) => {

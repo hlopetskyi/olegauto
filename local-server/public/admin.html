@@ -565,6 +565,16 @@
       </div>
       <button class="btn-primary" onclick="addAdmin()"><i class="fas fa-plus"></i> Додати</button>
     </div>
+
+    <div class="card" style="margin-top:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-weight:600;font-size:15px"><i class="fas fa-history" style="margin-right:8px;color:var(--primary)"></i>Журнал входів</div>
+        <button class="btn-secondary" onclick="loadAccessLog()" style="padding:6px 14px;font-size:13px"><i class="fas fa-sync-alt"></i> Оновити</button>
+      </div>
+      <div id="accessLogList" style="font-family:monospace;font-size:13px;line-height:1.7;color:var(--gray-600);max-height:400px;overflow-y:auto">
+        <div style="color:var(--gray-400)">Натисніть «Оновити» щоб завантажити журнал...</div>
+      </div>
+    </div>
   </div>
 
 </div><!-- /main -->
@@ -1510,6 +1520,26 @@ async function addAdmin() {
   document.getElementById('new-admin-user').value = '';
   document.getElementById('new-admin-pass').value = '';
   loadAdmins();
+}
+
+async function loadAccessLog() {
+  const el = document.getElementById('accessLogList');
+  el.innerHTML = '<div style="color:var(--gray-400)">Завантаження...</div>';
+  try {
+    const res = await fetch('/api/admins/log');
+    if (!res.ok) throw new Error(res.status);
+    const lines = await res.json();
+    if (!lines.length) { el.innerHTML = '<div style="color:var(--gray-400)">Журнал порожній</div>'; return; }
+    el.innerHTML = lines.map(line => {
+      const ok = line.includes('OK');
+      const fail = line.includes('FAIL');
+      const color = ok ? 'var(--green,#16a34a)' : fail ? 'var(--danger,#dc2626)' : 'var(--gray-600)';
+      const icon = ok ? '✅' : fail ? '❌' : 'ℹ️';
+      return `<div style="color:${color};padding:2px 0;border-bottom:1px solid var(--gray-100)">${icon} ${line}</div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--danger)">Помилка завантаження: ${e.message}</div>`;
+  }
 }
 
 function showToast(msg, type='') {
