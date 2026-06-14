@@ -836,8 +836,13 @@ async function loadProductDetail(id) {
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const p = await api('/api/products/'+id);
-    const imgHtml = p.image
-      ? `<img src="${p.image}" alt="${p.name}" style="max-height:360px;margin:auto">`
+    const imgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
+    const imgHtml = imgs.length
+      ? `<div>
+          <img id="mainImg" src="${imgs[0]}" alt="${p.name}" style="max-height:360px;margin:auto;display:block;border-radius:8px">
+          ${imgs.length>1?`<div style="display:flex;gap:8px;margin-top:10px;justify-content:center;flex-wrap:wrap">
+            ${imgs.map((src,i)=>`<img src="${src}" onclick="document.getElementById('mainImg').src='${src}'" style="width:64px;height:64px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid ${i===0?'var(--blue)':'var(--gray-200)'};transition:border-color .2s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--gray-200)'">`).join('')}
+          </div>`:''}</div>`
       : `<span style="font-size:80px">${CAT_EMOJI[p.category]||'🔧'}</span>`;
     const stockLabel = p.stock>5 ? `<span style="color:var(--green)"><i class="fas fa-check-circle"></i> В наявності (${p.stock} шт)</span>`
       : p.stock>0 ? `<span style="color:var(--amber)"><i class="fas fa-exclamation-circle"></i> Останні ${p.stock} шт</span>`
@@ -892,7 +897,7 @@ function addToCart(id) {
   fetch('/api/products/'+id).then(r=>r.json()).then(p=>{
     const idx = cart.findIndex(c=>c.id===id);
     if(idx>=0) cart[idx].qty++;
-    else cart.push({id:p.id,name:p.name,price:p.price,image:p.image,category:p.category,qty:1});
+    else cart.push({id:p.id,name:p.name,price:p.price,image:p.image,category:p.category,brand:p.brand,model:p.model,article:p.article||'',qty:1});
     saveCart();
     showToast(`"${p.name}" додано до кошика`,'success');
   });
@@ -922,8 +927,7 @@ function renderCart() {
   }
 
   const subtotal = cart.reduce((s,c)=>s+c.price*c.qty,0);
-  const delivery = subtotal>=1500 ? 0 : 150;
-  const total = subtotal + delivery;
+  const total = subtotal;
 
   el.innerHTML = `
 <div class="cart-layout">
@@ -967,8 +971,6 @@ function renderCart() {
     <div class="cart-summary">
       <h3>Підсумок</h3>
       <div class="sum-row"><span>Товарів (${cart.reduce((s,c)=>s+c.qty,0)} шт)</span><span>€${subtotal.toLocaleString('de-DE')}</span></div>
-      <div class="sum-row"><span>Доставка</span><span>${delivery?'€'+delivery:'Безкоштовно'}</span></div>
-      ${delivery===0?`<div style="font-size:12px;color:var(--green);margin-top:4px"><i class="fas fa-gift"></i> Безкоштовна доставка від €150</div>`:`<div style="font-size:12px;color:var(--gray-500);margin-top:4px">Безкоштовна доставка від €150</div>`}
       <div class="sum-total"><span>Разом</span><span style="color:var(--orange)">€${total.toLocaleString('de-DE')}</span></div>
       <button class="btn-checkout" onclick="document.getElementById('checkoutForm').scrollIntoView({behavior:'smooth'})">
         <i class="fas fa-arrow-down"></i> Оформити замовлення
@@ -997,7 +999,6 @@ async function submitOrder() {
   if(!name||!phone){ showToast('Вкажіть ім\'я та телефон','error'); return; }
 
   const subtotal = cart.reduce((s,c)=>s+c.price*c.qty,0);
-  const delivery = subtotal>=1500 ? 0 : 150;
   const body = {
     customerName: name,
     customerPhone: phone,
@@ -1006,8 +1007,7 @@ async function submitOrder() {
     comment: document.getElementById('oComment').value,
     items: cart,
     subtotal,
-    deliveryCost: delivery,
-    total: subtotal+delivery
+    total: subtotal
   };
 
   try {
@@ -1043,8 +1043,11 @@ async function submitQuick(id, name, price) {
   const n = document.getElementById('qName').value.trim();
   const p = document.getElementById('qPhone').value.trim();
   if(!n||!p){ showToast('Вкажіть ім\'я та телефон','error'); return; }
+  const prod = allProducts.find(x=>x.id===id)||{};
   await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    customerName:n,customerPhone:p,items:[{id,name,price,qty:1}],total:price,status:'new',delivery:'quick_call'
+    customerName:n,customerPhone:p,
+    items:[{id,name,price,qty:1,image:prod.image||null,category:prod.category||'',brand:prod.brand||'',model:prod.model||'',article:prod.article||''}],
+    total:price,status:'new',delivery:'quick_call'
   })});
   closeModalDirect();
   showModal(`<div class="modal-icon">📞</div><h2>Очікуйте дзвінка!</h2><p>Ми зателефонуємо вам на номер <strong>${p}</strong> найближчим часом.</p><div class="modal-btns"><button class="btn-outline" onclick="closeModalDirect()">Закрити</button></div>`);

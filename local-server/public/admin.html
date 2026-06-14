@@ -356,9 +356,12 @@
             <textarea id="fDesc" placeholder="Детальний опис товару, особливості, стан..."></textarea>
           </div>
           <div class="form-field form-full">
-            <label>Фото товару</label>
-            <input type="file" id="fImage" accept="image/*" onchange="previewImage(this)">
-            <div class="img-preview" id="imgPreview"><i class="fas fa-image" style="font-size:28px;color:var(--gray-300)"></i></div>
+            <label>Фото товару <span style="color:var(--gray-400);font-weight:400;font-size:12px">(до 5 фото, перше — головне)</span></label>
+            <div id="imgGrid" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px"></div>
+            <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;background:var(--gray-100);border:1.5px dashed var(--gray-300);border-radius:8px;padding:10px 18px;font-size:14px;color:var(--gray-600);transition:all .2s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--gray-300)'">
+              <i class="fas fa-plus"></i> Додати фото
+              <input type="file" id="fImages" accept="image/*" multiple style="display:none" onchange="addImagePreviews(this)">
+            </label>
           </div>
         </div>
         <div class="form-actions">
@@ -387,11 +390,26 @@
               <th>Товари</th>
               <th>Сума</th>
               <th>Статус</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="ordersTableBody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- ORDER DETAIL MODAL -->
+  <div id="orderModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;overflow-y:auto;padding:24px" onclick="if(event.target===this)closeOrderModal()">
+    <div style="background:#fff;border-radius:16px;max-width:680px;margin:auto;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <div style="background:var(--blue);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:18px;font-weight:700" id="modalOrderTitle">Замовлення #—</div>
+          <div style="font-size:13px;opacity:.75;margin-top:2px" id="modalOrderDate"></div>
+        </div>
+        <button onclick="closeOrderModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:18px"><i class="fas fa-times"></i></button>
+      </div>
+      <div style="padding:24px" id="modalOrderBody"></div>
     </div>
   </div>
 
@@ -573,6 +591,7 @@ function renderProductsTable() {
       <td style="font-weight:700;color:var(--orange)">${p.price.toLocaleString('de-DE')} €</td>
       <td><span class="${stockCls}">${stockTxt}</span></td>
       <td style="white-space:nowrap">
+        <a class="act-btn" href="${location.origin}/#product-${p.id}" target="_blank" title="Переглянути на сайті" style="text-decoration:none"><i class="fas fa-eye"></i></a>
         <button class="act-btn edit" onclick="editProduct(${p.id})" title="Редагувати"><i class="fas fa-pen"></i></button>
         <button class="act-btn del" onclick="deleteProduct(${p.id},'${p.name.replace(/'/g,"\\'")}')  " title="Видалити"><i class="fas fa-trash"></i></button>
       </td>
@@ -599,10 +618,30 @@ function goPage(n) {
 }
 
 // ============ ADD / EDIT ============
-const BRANDS = ['Renault','Peugeot','Citroën','Fiat'];
+const CAR_MODELS = {
+  'Renault': ['Clio I','Clio II','Clio III','Clio IV','Clio V','Megane I','Megane II','Megane III','Megane IV','Laguna I','Laguna II','Laguna III','Scenic I','Scenic II','Scenic III','Scenic IV','Kangoo I','Kangoo II','Kangoo III','Trafic II','Trafic III','Master II','Master III','Duster I','Duster II','Captur I','Captur II','Kadjar','Koleos','Symbol','Thalia','Twingo I','Twingo II','Twingo III','Espace III','Espace IV','Vel Satis','Fluence','Latitude','Zoe','Logan I','Logan II','Sandero I','Sandero II'],
+  'Peugeot': ['106','107','108','205','206','206+','207','208 I','208 II','301','306','307','308 I','308 II','309','405','406','407','408','508 I','508 II','605','607','1007','2008 I','2008 II','3008 I','3008 II','4007','4008','5008 I','5008 II','Bipper','Partner I','Partner II','Partner III','Expert II','Expert III','Boxer II','Boxer III','RCZ','Traveller'],
+  'Citroën': ['AX','BX','C1 I','C1 II','C2','C3 I','C3 II','C3 III','C3 Aircross','C3 Picasso','C4 I','C4 II','C4 III','C4 Cactus','C4 Grand Picasso I','C4 Grand Picasso II','C4 Picasso I','C4 Picasso II','C5 I','C5 II','C5 III','C5 X','C6','C8','C-Crosser','C-Elysée','DS3','DS4','DS5','Berlingo I','Berlingo II','Berlingo III','Jumpy II','Jumpy III','Jumper II','Jumper III','Nemo','Saxo','Xantia','Xsara','Xsara Picasso','ZX'],
+  'Fiat': ['500','500L','500X','Barchetta','Bravo I','Bravo II','Brava','Cinquecento','Croma','Doblo I','Doblo II','Ducato II','Ducato III','Fiorino','Freemont','Grande Punto','Idea','Linea','Marea','Multipla','Palio','Panda I','Panda II','Panda III','Punto I','Punto II','Punto III','Qubo','Scudo II','Scudo III','Sedici','Seicento','Stilo','Strada','Tempra','Tipo I','Tipo II','Ulysse','Uno'],
+};
+
+const BRANDS = Object.keys(CAR_MODELS);
 
 function brandOptions(selected) {
   return BRANDS.map(b => `<option value="${b}"${b===selected?' selected':''}>${b}</option>`).join('');
+}
+
+function modelOptions(brand, selected) {
+  const models = CAR_MODELS[brand] || [];
+  return models.map(m => `<option value="${m}"${m===selected?' selected':''}>${m}</option>`).join('');
+}
+
+function onBrandChange(brandSel) {
+  const row = brandSel.closest('.compat-row');
+  const modelSel = row.querySelector('.compat-model');
+  const brand = brandSel.value;
+  modelSel.innerHTML = `<option value="">— модель —</option>${modelOptions(brand, '')}`;
+  modelSel.disabled = !brand;
 }
 
 function addCompatRow(brand='', model='') {
@@ -611,11 +650,14 @@ function addCompatRow(brand='', model='') {
   row.className = 'compat-row';
   row.style = 'display:flex;gap:8px;align-items:center';
   row.innerHTML = `
-    <select class="form-control compat-brand" style="flex:0 0 160px">
+    <select class="form-control compat-brand" style="flex:0 0 160px" onchange="onBrandChange(this)">
       <option value="">— бренд —</option>
       ${brandOptions(brand)}
     </select>
-    <input type="text" class="form-control compat-model" placeholder="Модель (напр. Clio IV)" value="${model}" style="flex:1">
+    <select class="form-control compat-model" style="flex:1" ${!brand?'disabled':''}>
+      <option value="">— модель —</option>
+      ${modelOptions(brand, model)}
+    </select>
     <button type="button" onclick="this.closest('.compat-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:4px 8px"><i class="fas fa-times"></i></button>`;
   list.appendChild(row);
 }
@@ -623,7 +665,7 @@ function addCompatRow(brand='', model='') {
 function getCompatibility() {
   return Array.from(document.querySelectorAll('.compat-row')).map(row => ({
     brand: row.querySelector('.compat-brand').value,
-    model: row.querySelector('.compat-model').value.trim(),
+    model: row.querySelector('.compat-model').value,
   })).filter(c => c.brand || c.model);
 }
 
@@ -641,7 +683,10 @@ function resetForm() {
   document.getElementById('productForm').reset();
   document.getElementById('formTitle').textContent='Додати товар';
   document.getElementById('submitBtnText').textContent='Зберегти товар';
-  document.getElementById('imgPreview').innerHTML='<i class="fas fa-image" style="font-size:28px;color:var(--gray-300)"></i>';
+  document.getElementById('imgGrid').innerHTML = '';
+  document.getElementById('fImages').value = '';
+  existingImages = [];
+  newImageFiles = [];
   setCompatibility([]);
 }
 
@@ -662,19 +707,63 @@ async function editProduct(id) {
   document.getElementById('formTitle').textContent = 'Редагувати товар';
   document.getElementById('submitBtnText').textContent = 'Зберегти зміни';
   if(p.image) {
-    document.getElementById('imgPreview').innerHTML=`<img src="${p.image}" alt="">`;
+    const imgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
+    renderExistingImages(imgs);
   }
   showSection('addProduct');
 }
 
-function previewImage(input) {
-  const file = input.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('imgPreview').innerHTML=`<img src="${e.target.result}" alt="">`;
-  };
-  reader.readAsDataURL(file);
+// existing images (URLs already on server)
+let existingImages = [];
+
+function renderExistingImages(imgs) {
+  existingImages = imgs || [];
+  const grid = document.getElementById('imgGrid');
+  // remove existing-image cards, keep new-file cards
+  grid.querySelectorAll('.img-card-existing').forEach(el => el.remove());
+  existingImages.forEach((url, i) => {
+    const card = document.createElement('div');
+    card.className = 'img-card img-card-existing';
+    card.style = 'position:relative;width:90px;height:90px;border-radius:8px;overflow:hidden;border:1.5px solid var(--gray-200)';
+    card.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover">
+      <button type="button" onclick="removeExistingImage(${i})" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.55);border:none;color:#fff;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center"><i class="fas fa-times"></i></button>
+      ${i===0?'<span style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,35,149,.7);color:#fff;font-size:10px;text-align:center;padding:2px">Головне</span>':''}`;
+    grid.prepend(card);
+  });
+}
+
+function removeExistingImage(i) {
+  existingImages.splice(i, 1);
+  renderExistingImages(existingImages);
+}
+
+let newImageFiles = [];
+
+function addImagePreviews(input) {
+  const grid = document.getElementById('imgGrid');
+  const total = existingImages.length + newImageFiles.length + input.files.length;
+  if (total > 5) { showToast('Максимум 5 фото', 'error'); input.value=''; return; }
+  Array.from(input.files).forEach(file => {
+    const idx = newImageFiles.length;
+    newImageFiles.push(file);
+    const reader = new FileReader();
+    reader.onload = e => {
+      const card = document.createElement('div');
+      card.className = 'img-card img-card-new';
+      card.dataset.idx = idx;
+      card.style = 'position:relative;width:90px;height:90px;border-radius:8px;overflow:hidden;border:1.5px solid var(--gray-200)';
+      card.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">
+        <button type="button" onclick="removeNewImage(this,${idx})" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.55);border:none;color:#fff;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center"><i class="fas fa-times"></i></button>`;
+      grid.appendChild(card);
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+function removeNewImage(btn, idx) {
+  newImageFiles[idx] = null;
+  btn.closest('.img-card-new').remove();
 }
 
 async function submitProduct(e) {
@@ -692,8 +781,8 @@ async function submitProduct(e) {
   fd.append('oem', document.getElementById('fOem').value);
   fd.append('article', document.getElementById('fArticle').value);
   fd.append('description', document.getElementById('fDesc').value);
-  const imgFile = document.getElementById('fImage').files[0];
-  if(imgFile) fd.append('image', imgFile);
+  fd.append('keepImages', JSON.stringify(existingImages));
+  newImageFiles.filter(Boolean).forEach(f => fd.append('images', f));
 
   try {
     const btn = document.querySelector('#productForm button[type="submit"]');
@@ -729,32 +818,35 @@ function deleteProduct(id, name) {
 }
 
 // ============ ORDERS ============
+let allOrders = [];
+
 async function loadOrders() {
   try {
-    const orders = await api('/api/orders');
-    document.getElementById('ordCount').textContent = `(${orders.length})`;
+    allOrders = await api('/api/orders');
+    document.getElementById('ordCount').textContent = `(${allOrders.length})`;
     const tbody = document.getElementById('ordersTableBody');
-    if(!orders.length) {
-      tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:50px;color:var(--gray-400)">
+    if(!allOrders.length) {
+      tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:50px;color:var(--gray-400)">
         <i class="fas fa-clipboard-list" style="font-size:36px;display:block;margin-bottom:12px;opacity:.25"></i>
         Замовлень поки немає
       </td></tr>`;
       return;
     }
-    tbody.innerHTML = orders.map(o=>{
+    tbody.innerHTML = allOrders.map(o=>{
       const date = new Date(o.createdAt).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
       const items = (o.items||[]).map(i=>`${i.name} ×${i.qty}`).join(', ');
-      const statusOpts = STATUS_OPTS.map(s=>`<option value="${s.val}" ${o.status===s.val?'selected':''}>${s.label}</option>`).join('');
-      return `<tr>
+      const statusOpt = STATUS_OPTS.find(s=>s.val===o.status)||STATUS_OPTS[0];
+      return `<tr style="cursor:pointer" onclick="openOrderModal(${o.id})">
         <td><strong style="color:var(--blue)">#${o.id}</strong></td>
         <td style="font-size:12px;color:var(--gray-500)">${date}</td>
         <td><strong>${o.customerName||'—'}</strong></td>
         <td style="font-size:13px">${o.customerPhone||'—'}</td>
-        <td style="font-size:12px;color:var(--gray-500);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${items}">${items||'—'}</td>
+        <td style="font-size:12px;color:var(--gray-500);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${items||'—'}</td>
         <td style="font-weight:700;color:var(--orange)">${(o.total||0).toLocaleString('de-DE')} €</td>
-        <td>
+        <td><span class="badge ${statusOpt.cls}">${statusOpt.label}</span></td>
+        <td onclick="event.stopPropagation()">
           <select class="status-sel" onchange="updateOrderStatus(${o.id},this.value)">
-            ${statusOpts}
+            ${STATUS_OPTS.map(s=>`<option value="${s.val}" ${o.status===s.val?'selected':''}>${s.label}</option>`).join('')}
           </select>
         </td>
       </tr>`;
@@ -765,6 +857,72 @@ async function loadOrders() {
 async function updateOrderStatus(id, status) {
   await fetch(`/api/orders/${id}/status`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
   showToast('Статус оновлено','success');
+  const o = allOrders.find(x=>x.id===id);
+  if(o) o.status = status;
+  // update badge in modal if open
+  const badge = document.getElementById('modalStatusBadge');
+  if(badge) { const s=STATUS_OPTS.find(x=>x.val===status)||STATUS_OPTS[0]; badge.className='badge '+s.cls; badge.textContent=s.label; }
+}
+
+function openOrderModal(id) {
+  const o = allOrders.find(x=>x.id===id);
+  if(!o) return;
+  const date = new Date(o.createdAt).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const deliveryLabels = {nova_poshta:'Нова Пошта',pickup:'Самовивіз',quick_call:'Передзвонити'};
+  const statusOpt = STATUS_OPTS.find(s=>s.val===o.status)||STATUS_OPTS[0];
+
+  document.getElementById('modalOrderTitle').textContent = `Замовлення #${o.id}`;
+  document.getElementById('modalOrderDate').textContent = date;
+
+  const itemsHtml = (o.items||[]).map(i=>`
+    <div style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--gray-100)">
+      ${i.image?`<img src="${i.image}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--gray-200);flex-shrink:0">`
+               :`<div style="width:56px;height:56px;border-radius:8px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${CAT_EMOJI[i.category]||'🔧'}</div>`}
+      <div style="flex:1;min-width:0">
+        <a href="${location.origin}/#product-${i.id}" target="_blank" style="font-weight:600;font-size:14px;margin-bottom:3px;color:var(--blue);text-decoration:none;display:block" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${i.name} <i class="fas fa-external-link-alt" style="font-size:11px;opacity:.6"></i></a>
+        <div style="font-size:12px;color:var(--gray-500);display:flex;gap:12px;flex-wrap:wrap">
+          ${i.category?`<span><i class="fas fa-tag"></i> ${i.category}</span>`:''}
+          ${i.brand?`<span><i class="fas fa-car"></i> ${i.brand}${i.model?' '+i.model:''}</span>`:''}
+          ${i.article?`<span><i class="fas fa-barcode"></i> ${i.article}</span>`:''}
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-weight:700;color:var(--orange)">${(i.price||0).toLocaleString('de-DE')} €</div>
+        <div style="font-size:12px;color:var(--gray-500)">× ${i.qty||1} шт</div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('modalOrderBody').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div style="background:var(--gray-50);border-radius:10px;padding:16px">
+        <div style="font-size:11px;text-transform:uppercase;color:var(--gray-400);font-weight:600;margin-bottom:10px;letter-spacing:.5px">Покупець</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">${o.customerName||'—'}</div>
+        <div style="margin-bottom:4px"><a href="tel:${o.customerPhone}" style="color:var(--blue);font-weight:600;font-size:14px"><i class="fas fa-phone"></i> ${o.customerPhone||'—'}</a></div>
+        ${o.city?`<div style="font-size:13px;color:var(--gray-600);margin-top:4px"><i class="fas fa-map-marker-alt"></i> ${o.city}</div>`:''}
+      </div>
+      <div style="background:var(--gray-50);border-radius:10px;padding:16px">
+        <div style="font-size:11px;text-transform:uppercase;color:var(--gray-400);font-weight:600;margin-bottom:10px;letter-spacing:.5px">Доставка та статус</div>
+        <div style="font-size:13px;margin-bottom:8px"><i class="fas fa-truck"></i> ${deliveryLabels[o.delivery]||o.delivery||'—'}</div>
+        <div style="margin-bottom:10px"><span class="badge ${statusOpt.cls}" id="modalStatusBadge">${statusOpt.label}</span></div>
+        <select class="status-sel" onchange="updateOrderStatus(${o.id},this.value)" style="font-size:13px">
+          ${STATUS_OPTS.map(s=>`<option value="${s.val}" ${o.status===s.val?'selected':''}>${s.label}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    ${o.comment?`<div style="background:#fffbf0;border:1px solid #ffe58f;border-radius:10px;padding:14px;margin-bottom:20px;font-size:13px"><i class="fas fa-comment" style="color:var(--amber)"></i> <strong>Коментар:</strong> ${o.comment}</div>`:''}
+    <div style="font-size:11px;text-transform:uppercase;color:var(--gray-400);font-weight:600;margin-bottom:8px;letter-spacing:.5px">Товари (${(o.items||[]).length} позиції)</div>
+    <div>${itemsHtml}</div>
+    <div style="display:flex;justify-content:flex-end;align-items:center;margin-top:16px;padding-top:16px;border-top:2px solid var(--gray-100)">
+      <div style="font-size:20px;font-weight:800;color:var(--orange)">${(o.total||0).toLocaleString('de-DE')} €</div>
+    </div>`;
+
+  document.getElementById('orderModal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeOrderModal() {
+  document.getElementById('orderModal').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 // ============ HELPERS ============

@@ -122,9 +122,10 @@ app.get('/api/products/:id', (req, res) => {
   res.json(p);
 });
 
-app.post('/api/products', upload.single('image'), (req, res) => {
+app.post('/api/products', upload.array('images', 5), (req, res) => {
   const products = readData('products.json');
   const compatibility = JSON.parse(req.body.compatibility || '[]');
+  const images = (req.files || []).map(f => '/uploads/' + f.filename);
   const product = {
     id: nextId(products),
     name: req.body.name,
@@ -140,7 +141,8 @@ app.post('/api/products', upload.single('image'), (req, res) => {
     oem: req.body.oem || '',
     article: req.body.article || '',
     description: req.body.description || '',
-    image: req.file ? '/uploads/' + req.file.filename : null,
+    images,
+    image: images[0] || null,
     createdAt: new Date().toISOString()
   };
   products.unshift(product);
@@ -148,11 +150,16 @@ app.post('/api/products', upload.single('image'), (req, res) => {
   res.json(product);
 });
 
-app.put('/api/products/:id', upload.single('image'), (req, res) => {
+app.put('/api/products/:id', upload.array('images', 5), (req, res) => {
   const products = readData('products.json');
   const idx = products.findIndex(p => p.id === parseInt(req.params.id));
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
   const updCompatibility = JSON.parse(req.body.compatibility || '[]');
+  const newImages = (req.files || []).map(f => '/uploads/' + f.filename);
+  // keep existing images unless new ones uploaded or user removed some
+  const keepImages = JSON.parse(req.body.keepImages || 'null');
+  const existingImages = keepImages !== null ? keepImages : (products[idx].images || (products[idx].image ? [products[idx].image] : []));
+  const allImages = [...existingImages, ...newImages];
   const updated = {
     ...products[idx],
     name: req.body.name,
@@ -168,8 +175,9 @@ app.put('/api/products/:id', upload.single('image'), (req, res) => {
     oem: req.body.oem || '',
     article: req.body.article || '',
     description: req.body.description || '',
+    images: allImages,
+    image: allImages[0] || null,
   };
-  if (req.file) updated.image = '/uploads/' + req.file.filename;
   products[idx] = updated;
   writeData('products.json', products);
   res.json(updated);
