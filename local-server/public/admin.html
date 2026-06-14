@@ -240,6 +240,14 @@
       <div class="stat-card stat-orange"><div class="stat-label">Загальний дохід<i class="fas fa-hryvnia-sign stat-icon"></i></div><div class="stat-val" id="s-revenue">—</div></div>
     </div>
 
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">
+        <span><i class="fas fa-chart-bar" style="color:var(--blue);margin-right:8px"></i>Замовлення за 14 днів</span>
+        <span id="chartTotal" style="font-size:13px;font-weight:400;color:var(--gray-500)"></span>
+      </div>
+      <div id="ordersChart" style="padding:8px 0"></div>
+    </div>
+
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
       <div class="card">
         <div class="card-title">
@@ -450,6 +458,22 @@
       <button class="btn-primary" onclick="loadOrders()"><i class="fas fa-sync-alt"></i> Оновити</button>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:14px 20px;border-bottom:1.5px solid var(--gray-200)">
+        <div class="filter-bar">
+          <input type="text" class="search-input" id="orderSearch" placeholder="Пошук за ім'ям, телефоном, №..." oninput="filterOrders()" style="flex:1;min-width:180px">
+          <select id="filterOrderStatus" onchange="filterOrders()" class="filter-bar select">
+            <option value="">Всі статуси</option>
+            <option value="new">Нові</option>
+            <option value="processing">В обробці</option>
+            <option value="shipped">Відправлено</option>
+            <option value="done">Виконано</option>
+            <option value="cancelled">Скасовано</option>
+          </select>
+          <input type="date" id="filterOrderDateFrom" onchange="filterOrders()" title="Від дати" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;outline:none">
+          <input type="date" id="filterOrderDateTo" onchange="filterOrders()" title="До дати" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;outline:none">
+          <button onclick="resetOrderFilters()" class="btn-secondary btn-sm"><i class="fas fa-times"></i> Скинути</button>
+        </div>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -478,7 +502,10 @@
           <div style="font-size:18px;font-weight:700" id="modalOrderTitle">Замовлення #—</div>
           <div style="font-size:13px;opacity:.75;margin-top:2px" id="modalOrderDate"></div>
         </div>
-        <button onclick="closeOrderModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:18px"><i class="fas fa-times"></i></button>
+        <div style="display:flex;gap:8px">
+          <button onclick="printOrder()" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600"><i class="fas fa-print"></i> Друк</button>
+          <button onclick="closeOrderModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:18px"><i class="fas fa-times"></i></button>
+        </div>
       </div>
       <div style="padding:24px" id="modalOrderBody"></div>
     </div>
@@ -577,7 +604,7 @@ function showSection(name) {
   if(name==='settings') loadAdmins();
 }
 
-window.addEventListener('load', ()=> loadDashboard());
+window.addEventListener('load', ()=>{ loadDashboard(); initNotifications(); });
 
 // ============ API ============
 async function api(url, opts={}) {
@@ -598,6 +625,7 @@ async function loadDashboard() {
 
   try {
     const orders = await api('/api/orders');
+    renderOrdersChart(orders);
     const recent = orders.slice(0,5);
     const oEl = document.getElementById('dashOrders');
     if(!recent.length){ oEl.innerHTML='<div class="empty-state"><i class="fas fa-clipboard-list"></i><p>Замовлень ще немає</p></div>'; }
@@ -1125,38 +1153,73 @@ function checkStockWarning(input) {
 // ============ ORDERS ============
 let allOrders = [];
 
+let filteredOrders = [];
+
 async function loadOrders() {
   try {
     allOrders = await api('/api/orders');
     document.getElementById('ordCount').textContent = `(${allOrders.length})`;
-    const tbody = document.getElementById('ordersTableBody');
-    if(!allOrders.length) {
-      tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:50px;color:var(--gray-400)">
-        <i class="fas fa-clipboard-list" style="font-size:36px;display:block;margin-bottom:12px;opacity:.25"></i>
-        Замовлень поки немає
-      </td></tr>`;
-      return;
-    }
-    tbody.innerHTML = allOrders.map(o=>{
-      const date = new Date(o.createdAt).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-      const items = (o.items||[]).map(i=>`${i.name} ×${i.qty}`).join(', ');
-      const statusOpt = STATUS_OPTS.find(s=>s.val===o.status)||STATUS_OPTS[0];
-      return `<tr style="cursor:pointer" onclick="openOrderModal(${o.id})">
-        <td><strong style="color:var(--blue)">#${o.id}</strong></td>
-        <td style="font-size:12px;color:var(--gray-500)">${date}</td>
-        <td><strong>${o.customerName||'—'}</strong></td>
-        <td style="font-size:13px">${o.customerPhone||'—'}</td>
-        <td style="font-size:12px;color:var(--gray-500);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${items||'—'}</td>
-        <td style="font-weight:700;color:var(--orange)">${(o.total||0).toLocaleString('de-DE')} €</td>
-        <td><span class="badge ${statusOpt.cls}">${statusOpt.label}</span></td>
-        <td onclick="event.stopPropagation()">
-          <select class="status-sel" onchange="updateOrderStatus(${o.id},this.value)">
-            ${STATUS_OPTS.map(s=>`<option value="${s.val}" ${o.status===s.val?'selected':''}>${s.label}</option>`).join('')}
-          </select>
-        </td>
-      </tr>`;
-    }).join('');
+    filterOrders();
   } catch(e) { showToast('Помилка завантаження замовлень','error'); }
+}
+
+function filterOrders() {
+  const q = (document.getElementById('orderSearch')?.value||'').toLowerCase();
+  const status = document.getElementById('filterOrderStatus')?.value||'';
+  const dateFrom = document.getElementById('filterOrderDateFrom')?.value||'';
+  const dateTo = document.getElementById('filterOrderDateTo')?.value||'';
+
+  filteredOrders = allOrders.filter(o=>{
+    if(q && !(
+      String(o.id).includes(q)||
+      (o.customerName||'').toLowerCase().includes(q)||
+      (o.customerPhone||'').includes(q)
+    )) return false;
+    if(status && o.status!==status) return false;
+    if(dateFrom && o.createdAt < dateFrom) return false;
+    if(dateTo && o.createdAt.slice(0,10) > dateTo) return false;
+    return true;
+  });
+  renderOrders();
+}
+
+function resetOrderFilters() {
+  document.getElementById('orderSearch').value='';
+  document.getElementById('filterOrderStatus').value='';
+  document.getElementById('filterOrderDateFrom').value='';
+  document.getElementById('filterOrderDateTo').value='';
+  filterOrders();
+}
+
+function renderOrders() {
+  const tbody = document.getElementById('ordersTableBody');
+  if(!filteredOrders.length) {
+    tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:50px;color:var(--gray-400)">
+      <i class="fas fa-clipboard-list" style="font-size:36px;display:block;margin-bottom:12px;opacity:.25"></i>
+      ${allOrders.length?'Нічого не знайдено':'Замовлень поки немає'}
+    </td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filteredOrders.map(o=>{
+    const date = new Date(o.createdAt).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const items = (o.items||[]).map(i=>`${i.name} ×${i.qty}`).join(', ');
+    const statusOpt = STATUS_OPTS.find(s=>s.val===o.status)||STATUS_OPTS[0];
+    const isNew = o.status==='new';
+    return `<tr style="cursor:pointer${isNew?';background:#fff8f0':''}" onclick="openOrderModal(${o.id})">
+      <td><strong style="color:var(--blue)">#${o.id}</strong>${isNew?'<span style="display:inline-block;width:7px;height:7px;background:var(--red);border-radius:50%;margin-left:6px;vertical-align:middle"></span>':''}</td>
+      <td style="font-size:12px;color:var(--gray-500)">${date}</td>
+      <td><strong>${o.customerName||'—'}</strong></td>
+      <td style="font-size:13px">${o.customerPhone||'—'}</td>
+      <td style="font-size:12px;color:var(--gray-500);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${items||'—'}</td>
+      <td style="font-weight:700;color:var(--orange)">${(o.total||0).toLocaleString('de-DE')} €</td>
+      <td><span class="badge ${statusOpt.cls}">${statusOpt.label}</span></td>
+      <td onclick="event.stopPropagation()">
+        <select class="status-sel" onchange="updateOrderStatus(${o.id},this.value)">
+          ${STATUS_OPTS.map(s=>`<option value="${s.val}" ${o.status===s.val?'selected':''}>${s.label}</option>`).join('')}
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 async function updateOrderStatus(id, status) {
@@ -1228,6 +1291,130 @@ function openOrderModal(id) {
 function closeOrderModal() {
   document.getElementById('orderModal').style.display = 'none';
   document.body.style.overflow = '';
+}
+
+function printOrder() {
+  const title = document.getElementById('modalOrderTitle').textContent;
+  const date  = document.getElementById('modalOrderDate').textContent;
+  const body  = document.getElementById('modalOrderBody').innerHTML;
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
+  <style>
+    body{font-family:Arial,sans-serif;padding:24px;font-size:13px;color:#111}
+    h2{margin:0 0 4px}
+    .sub{color:#666;margin-bottom:20px;font-size:12px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+    .box{background:#f8f8f8;border-radius:8px;padding:14px}
+    .label{font-size:10px;text-transform:uppercase;color:#888;font-weight:700;letter-spacing:.5px;margin-bottom:8px}
+    .badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid #ddd}
+    img{border-radius:6px;object-fit:cover}
+    a{color:#002395;text-decoration:none}
+    select,button{display:none}
+    @media print{.no-print{display:none}}
+  </style></head><body>
+  <h2>${title}</h2>
+  <div class="sub">${date}</div>
+  <div>${body}</div>
+  <div class="no-print" style="margin-top:20px">
+    <button onclick="window.print()" style="display:inline-flex;padding:10px 20px;background:#002395;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">
+      Друкувати
+    </button>
+  </div>
+  </body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(()=>w.print(), 600);
+}
+
+// ============ ORDERS CHART ============
+function renderOrdersChart(orders) {
+  const el = document.getElementById('ordersChart');
+  if(!el) return;
+  const DAYS = 14;
+  const now = new Date();
+  const labels = [], counts = [], revenues = [];
+  for(let i=DAYS-1;i>=0;i--) {
+    const d = new Date(now); d.setDate(d.getDate()-i);
+    const dayStr = d.toISOString().slice(0,10);
+    labels.push(d.toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit'}));
+    const dayOrders = orders.filter(o=>o.createdAt?.startsWith(dayStr));
+    counts.push(dayOrders.length);
+    revenues.push(dayOrders.reduce((s,o)=>s+(o.total||0),0));
+  }
+  const maxC = Math.max(...counts,1);
+  const total14 = counts.reduce((a,b)=>a+b,0);
+  document.getElementById('chartTotal').textContent = `${total14} замовлень за 14 днів`;
+  const W = 100/DAYS;
+  const bars = counts.map((c,i)=>{
+    const h = Math.round((c/maxC)*120);
+    const x = i*W;
+    return `<g>
+      <rect x="${x+W*0.1}%" y="${130-h}" width="${W*0.8}%" height="${h}" rx="3"
+        fill="${c>0?'var(--blue)':'var(--gray-200)'}" opacity="0.85"/>
+      ${c>0?`<text x="${x+W/2}%" y="${124-h}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--blue)">${c}</text>`:''}
+      <text x="${x+W/2}%" y="148" text-anchor="middle" font-size="10" fill="var(--gray-500)">${labels[i]}</text>
+    </g>`;
+  }).join('');
+  el.innerHTML=`<svg width="100%" height="155" style="overflow:visible">${bars}</svg>`;
+}
+
+// ============ NOTIFICATIONS ============
+let _notifLastId = 0;
+let _notifInited = false;
+
+async function initNotifications() {
+  if(_notifInited) return;
+  _notifInited = true;
+  try {
+    const orders = await api('/api/orders');
+    _notifLastId = orders.length>0 ? orders[0].id : 0;
+  } catch(e){}
+  if('Notification' in window && Notification.permission==='default') {
+    Notification.requestPermission();
+  }
+  setInterval(pollNewOrders, 30000);
+}
+
+async function pollNewOrders() {
+  try {
+    const orders = await api('/api/orders');
+    if(!orders.length) return;
+    const newestId = orders[0].id;
+    if(_notifLastId>0 && newestId>_notifLastId) {
+      const newOnes = orders.filter(o=>o.id>_notifLastId);
+      notifyNewOrders(newOnes.length);
+      // refresh orders table if open
+      allOrders = orders;
+      document.getElementById('ordCount').textContent=`(${orders.length})`;
+      filterOrders();
+      // refresh dashboard badge
+      const badge = document.getElementById('s-orders');
+      if(badge) badge.textContent = orders.filter(o=>o.status==='new').length;
+    }
+    _notifLastId = newestId;
+  } catch(e){}
+}
+
+function notifyNewOrders(count) {
+  const word = count===1?'нове замовлення':`${count} нових замовлень`;
+  showToast(`🔔 ${word}!`, 'success');
+  // browser notification
+  if('Notification' in window && Notification.permission==='granted') {
+    new Notification('OlegAvto — нове замовлення!',{
+      body:`Надійшло ${word}. Відкрийте адмінку для перегляду.`,
+    });
+  }
+  // beep
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [880,1100].forEach((freq,i)=>{
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.frequency.value=freq; g.gain.setValueAtTime(0.2,ctx.currentTime+i*0.15);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+i*0.15+0.3);
+      osc.start(ctx.currentTime+i*0.15); osc.stop(ctx.currentTime+i*0.15+0.3);
+    });
+  } catch(e){}
 }
 
 // ============ HELPERS ============
