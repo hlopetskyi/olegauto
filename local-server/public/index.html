@@ -977,11 +977,8 @@ async function loadProductDetail(id) {
     </div>
     ${p.description?`<div class="detail-desc">${p.description}</div>`:''}
     <div class="detail-actions">
-      <button class="btn-primary" onclick="addToCart(${p.id});showPage('cart')" ${p.stock<=0?'disabled style="opacity:.5;cursor:not-allowed"':''}>
+      <button class="btn-primary" id="addToCartBtn" onclick="addToCartFromDetail(${p.id})" ${p.stock<=0?'disabled style="opacity:.5;cursor:not-allowed"':''}>
         <i class="fas fa-shopping-cart"></i> Додати в кошик
-      </button>
-      <button class="btn-secondary" onclick="quickOrder(${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price})">
-        <i class="fas fa-bolt"></i> Замовити в 1 клік
       </button>
     </div>
   </div>
@@ -1001,6 +998,15 @@ async function loadProductDetail(id) {
 }
 
 // ============ CART ============
+function addToCartFromDetail(id) {
+  addToCart(id);
+  const btn = document.getElementById('addToCartBtn');
+  if (!btn) return;
+  btn.innerHTML = '<i class="fas fa-check"></i> Додано у кошик';
+  btn.style.background = 'var(--green, #16a34a)';
+  btn.disabled = true;
+}
+
 function addToCart(id) {
   fetch('/api/products/'+id).then(r=>r.json()).then(p=>{
     const idx = cart.findIndex(c=>c.id===id);
@@ -1126,39 +1132,15 @@ async function submitOrder() {
 <div class="modal-icon">🎉</div>
 <h2>Замовлення прийнято!</h2>
 <p>Дякуємо, ${name}! Ми зв'яжемося з вами за номером<br><strong>${phone}</strong> найближчим часом.</p>
-<div class="modal-btns">
-  <button class="btn-outline" onclick="closeModalDirect();showPage('catalog')">Продовжити покупки</button>
-</div>`);
+<p style="color:var(--gray-400);font-size:13px;margin-top:12px">Повернення на головну через <span id="redirectCountdown">3</span> сек...</p>`);
+    let sec = 3;
+    const timer = setInterval(() => {
+      sec--;
+      const el = document.getElementById('redirectCountdown');
+      if (el) el.textContent = sec;
+      if (sec <= 0) { clearInterval(timer); closeModalDirect(); showPage('home'); }
+    }, 1000);
   } catch(e) { showToast('Помилка. Спробуйте ще раз.','error'); }
-}
-
-// ============ QUICK ORDER ============
-function quickOrder(id, name, price) {
-  showModal(`
-<h2 style="margin-bottom:8px;font-size:20px">Замовити в 1 клік</h2>
-<p style="color:var(--gray-500);margin-bottom:20px;font-size:14px">${name}</p>
-<div class="quick-order-form">
-  <div class="form-field"><label>Ваше ім'я</label><input type="text" id="qName" placeholder="Іван"></div>
-  <div class="form-field"><label>Телефон</label><input type="tel" id="qPhone" placeholder="+380671234567"></div>
-</div>
-<div class="modal-btns" style="margin-top:16px">
-  <button class="btn-primary" onclick="submitQuick(${id},'${name.replace(/'/g,"\\'")}',${price})" style="padding:12px 24px;flex:none">Передзвоніть мені</button>
-  <button class="btn-outline" onclick="closeModalDirect()">Скасувати</button>
-</div>`);
-}
-
-async function submitQuick(id, name, price) {
-  const n = document.getElementById('qName').value.trim();
-  const p = document.getElementById('qPhone').value.trim();
-  if(!n||!p){ showToast('Вкажіть ім\'я та телефон','error'); return; }
-  const prod = allProducts.find(x=>x.id===id)||{};
-  await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    customerName:n,customerPhone:p,
-    items:[{id,name,price,qty:1,image:prod.image||null,category:prod.category||'',brand:prod.brand||'',model:prod.model||'',article:prod.article||''}],
-    total:price,status:'new',delivery:'quick_call'
-  })});
-  closeModalDirect();
-  showModal(`<div class="modal-icon">📞</div><h2>Очікуйте дзвінка!</h2><p>Ми зателефонуємо вам на номер <strong>${p}</strong> найближчим часом.</p><div class="modal-btns"><button class="btn-outline" onclick="closeModalDirect()">Закрити</button></div>`);
 }
 
 // ============ SEARCH ============

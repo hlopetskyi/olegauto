@@ -372,22 +372,6 @@ app.post('/api/orders', (req, res) => {
   };
   orders.unshift(order);
   writeData('orders.json', orders);
-
-  // Decrease stock for each ordered item
-  const items = order.items || [];
-  if (items.length) {
-    const products = readData('products.json');
-    let changed = false;
-    items.forEach(item => {
-      const idx = products.findIndex(p => p.id === item.id);
-      if (idx !== -1 && products[idx].stock > 0) {
-        products[idx].stock = Math.max(0, products[idx].stock - (item.qty || 1));
-        changed = true;
-      }
-    });
-    if (changed) writeData('products.json', products);
-  }
-
   res.json(order);
 });
 
@@ -395,8 +379,46 @@ app.put('/api/orders/:id/status', (req, res) => {
   const orders = readData('orders.json');
   const idx = orders.findIndex(o => o.id === parseInt(req.params.id));
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  orders[idx].status = req.body.status;
+
+  const prevStatus = orders[idx].status;
+  const newStatus = req.body.status;
+  orders[idx].status = newStatus;
   writeData('orders.json', orders);
+
+  // Decrease stock only when transitioning TO "done" (not already done)
+  if (newStatus === 'done' && prevStatus !== 'done') {
+    const items = orders[idx].items || [];
+    if (items.length) {
+      const products = readData('products.json');
+      let changed = false;
+      items.forEach(item => {
+        const pidx = products.findIndex(p => p.id === item.id);
+        if (pidx !== -1) {
+          products[pidx].stock = Math.max(0, products[pidx].stock - (item.qty || 1));
+          changed = true;
+        }
+      });
+      if (changed) writeData('products.json', products);
+    }
+  }
+
+  // Restore stock if cancelled from done
+  if (newStatus === 'cancelled' && prevStatus === 'done') {
+    const items = orders[idx].items || [];
+    if (items.length) {
+      const products = readData('products.json');
+      let changed = false;
+      items.forEach(item => {
+        const pidx = products.findIndex(p => p.id === item.id);
+        if (pidx !== -1) {
+          products[pidx].stock += (item.qty || 1);
+          changed = true;
+        }
+      });
+      if (changed) writeData('products.json', products);
+    }
+  }
+
   res.json(orders[idx]);
 });
 
