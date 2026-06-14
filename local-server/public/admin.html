@@ -262,12 +262,12 @@
           <thead>
             <tr>
               <th>Фото</th>
-              <th>Назва</th>
+              <th onclick="sortTable('name')" style="cursor:pointer;user-select:none">Назва <span id="sort-name"></span></th>
               <th>Бренд</th>
-              <th>Категорія</th>
-              <th>Стан</th>
-              <th>Ціна</th>
-              <th>Залишок</th>
+              <th onclick="sortTable('category')" style="cursor:pointer;user-select:none">Категорія <span id="sort-category"></span></th>
+              <th onclick="sortTable('condition')" style="cursor:pointer;user-select:none">Стан <span id="sort-condition"></span></th>
+              <th onclick="sortTable('price')" style="cursor:pointer;user-select:none">Ціна <span id="sort-price"></span></th>
+              <th onclick="sortTable('stock')" style="cursor:pointer;user-select:none">Залишок <span id="sort-stock"></span></th>
               <th>Дії</th>
             </tr>
           </thead>
@@ -549,6 +549,26 @@ async function loadProducts() {
     document.getElementById('prodCount').textContent = `(${allProducts.length})`;
     renderProductsTable();
   } catch(e) { showToast('Помилка завантаження товарів','error'); }
+}
+
+let sortCol = null;
+let sortDir = 1; // 1 asc, -1 desc
+
+function sortTable(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = 1; }
+  ['name','category','condition','price','stock'].forEach(c => {
+    const el = document.getElementById('sort-'+c);
+    if (el) el.textContent = c === col ? (sortDir === 1 ? ' ↑' : ' ↓') : '';
+  });
+  filteredProducts.sort((a, b) => {
+    let av = a[col], bv = b[col];
+    if (col === 'condition') { const o = {new:0,refurbished:1,used:2}; av = o[av]??3; bv = o[bv]??3; }
+    if (typeof av === 'string') return av.localeCompare(bv, 'uk') * sortDir;
+    return ((av ?? 0) - (bv ?? 0)) * sortDir;
+  });
+  currentPage = 1;
+  renderProductsTable();
 }
 
 function filterProductsTable() {
