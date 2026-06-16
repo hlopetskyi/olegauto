@@ -1302,6 +1302,7 @@ async function submitProduct(e) {
     const pageToRestore = id ? savedPage : 1;
     showToast(id ? 'Товар оновлено!' : 'Товар додано!', 'success');
     resetForm();
+    btn.disabled = false;
     showSection('products', pageToRestore);
   } catch(err) {
     showToast('Помилка збереження', 'error');
