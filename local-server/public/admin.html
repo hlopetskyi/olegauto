@@ -279,7 +279,7 @@
           <i class="fas fa-upload"></i> Імпорт CSV
           <input type="file" id="importFileInput" accept=".gz" style="display:none" onchange="importProductsCSV(this)">
         </label>
-        <button class="btn-primary btn-sm" onclick="showSection('addProduct');resetForm()"><i class="fas fa-plus"></i> Додати товар</button>
+        <button class="btn-primary btn-sm" onclick="resetForm();showSection('addProduct')"><i class="fas fa-plus"></i> Додати товар</button>
       </div>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
@@ -1193,6 +1193,7 @@ let savedPage = 1;
 
 async function editProduct(id) {
   savedPage = currentPage;
+  resetForm();
   const p = allProducts.find(x=>x.id===id) || await api('/api/products/'+id);
   document.getElementById('editId').value = p.id;
   document.getElementById('fName').value = p.name||'';
@@ -1297,11 +1298,11 @@ async function submitProduct(e) {
     const res = await fetch(url, {method, body:fd});
     if (!res.ok) throw new Error('server error');
 
-    formDirty = false;
-    showToast(id ? 'Товар оновлено!' : 'Товар додано!', 'success');
-    btn.disabled = false;
-    btn.innerHTML = `<i class="fas fa-save"></i> ${id?'Зберегти зміни':'Зберегти товар'}`;
     const pageToRestore = id ? savedPage : 1;
+    resetForm();
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save"></i> Зберегти товар';
+    showToast(id ? 'Товар оновлено!' : 'Товар додано!', 'success');
     showSection('products', pageToRestore);
   } catch(err) {
     showToast('Помилка збереження', 'error');
