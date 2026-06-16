@@ -1090,8 +1090,8 @@ function onModelChange(modelSel) {
     const [from, to] = CAR_MODEL_YEARS[brand][model].split('–');
     const fromEl = document.getElementById('fYearFrom');
     const toEl = document.getElementById('fYearTo');
-    if (fromEl && !fromEl.value) fromEl.value = from || '';
-    if (toEl && !toEl.value && to && to !== '...') toEl.value = to;
+    if (fromEl) fromEl.value = from || '';
+    if (toEl) toEl.value = (to && to !== '...') ? to : '';
   }
 }
 
