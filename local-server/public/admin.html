@@ -1288,10 +1288,11 @@ async function submitProduct(e) {
   fd.append('keepImages', JSON.stringify(existingImages));
   newImageFiles.filter(Boolean).forEach(f => fd.append('images', f));
 
+  const btn = document.querySelector('#productForm button[type="submit"]');
+  const submitSpan = document.getElementById('submitBtnText');
   try {
-    const btn = document.querySelector('#productForm button[type="submit"]');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Збереження...';
+    if (submitSpan) submitSpan.textContent = 'Збереження...';
 
     const url = id ? `/api/products/${id}` : '/api/products';
     const method = id ? 'PUT' : 'POST';
@@ -1299,16 +1300,13 @@ async function submitProduct(e) {
     if (!res.ok) throw new Error('server error');
 
     const pageToRestore = id ? savedPage : 1;
-    resetForm();
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-save"></i> Зберегти товар';
     showToast(id ? 'Товар оновлено!' : 'Товар додано!', 'success');
+    resetForm();
     showSection('products', pageToRestore);
   } catch(err) {
     showToast('Помилка збереження', 'error');
-    const btn = document.querySelector('#productForm button[type="submit"]');
     btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-save"></i> Зберегти';
+    if (submitSpan) submitSpan.textContent = id ? 'Зберегти зміни' : 'Зберегти товар';
   }
 }
 
