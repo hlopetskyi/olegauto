@@ -1312,15 +1312,15 @@ async function submitProduct(e) {
 }
 
 function deleteProduct(id, name) {
-  document.getElementById('confirmTitle').textContent = 'Видалити товар?';
-  document.getElementById('confirmText').innerHTML = `Ви впевнені, що хочете видалити:<br><strong>${name}</strong><br><br>Цю дію неможливо скасувати.`;
-  document.getElementById('confirmModal').style.display='flex';
-  document.getElementById('confirmOkBtn').onclick = async ()=>{
-    document.getElementById('confirmModal').style.display='none';
-    await fetch('/api/products/'+id,{method:'DELETE'});
-    showToast('Товар видалено','success');
-    loadProducts(currentPage);
-  };
+  showConfirm(
+    'Видалити товар?',
+    `Ви впевнені, що хочете видалити "${name}"? Цю дію неможливо скасувати.`,
+    async () => {
+      await fetch('/api/products/'+id,{method:'DELETE'});
+      showToast('Товар видалено','success');
+      loadProducts(currentPage);
+    }
+  );
 }
 
 // ============ SELECTION & BULK ============
