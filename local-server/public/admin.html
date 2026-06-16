@@ -166,8 +166,10 @@
   .bulk-bar.active{display:flex}
   .bulk-bar select{padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:7px;font-size:13px;background:#fff}
   /* INLINE EDIT */
-  .inline-edit-cell{cursor:pointer}
-  .inline-edit-cell:hover{background:rgba(0,35,149,.04);border-radius:4px}
+  .inline-edit-cell{cursor:pointer;position:relative}
+  .inline-edit-cell:hover{background:rgba(0,35,149,.06);border-radius:4px;outline:1.5px dashed var(--blue)}
+  .inline-edit-cell::after{content:'✎';position:absolute;top:50%;right:4px;transform:translateY(-50%);font-size:11px;color:var(--blue);opacity:0;transition:opacity .15s}
+  .inline-edit-cell:hover::after{opacity:.5}
   /* CHECKBOX */
   .row-check{width:15px;height:15px;cursor:pointer;accent-color:var(--blue)}
   /* FILTER BAR */
@@ -324,7 +326,6 @@
             <option value="">Змінити стан...</option>
             <option value="new">Новий</option>
             <option value="used">Б/У</option>
-            <option value="refurbished">Відновлений</option>
           </select>
           <button class="btn-primary btn-sm" onclick="bulkUpdate()"><i class="fas fa-save"></i> Застосувати</button>
         </div>
@@ -370,10 +371,10 @@
   <div class="section" id="section-addProduct">
     <div class="page-header">
       <div class="page-title" id="formTitle">Додати товар</div>
-      <button class="btn-secondary" onclick="showSection('products')"><i class="fas fa-arrow-left"></i> До списку</button>
+      <button class="btn-secondary" onclick="leaveProductForm('products')"><i class="fas fa-arrow-left"></i> До списку</button>
     </div>
     <div class="card">
-      <form id="productForm" onsubmit="submitProduct(event)">
+      <form id="productForm" onsubmit="submitProduct(event)" oninput="markFormDirty()" onchange="markFormDirty()">
         <input type="hidden" id="editId">
         <div class="form-grid">
           <div class="form-field form-full required">
@@ -415,7 +416,6 @@
               <option value="">— оберіть стан —</option>
               <option value="new">Новий</option>
               <option value="used">Б/У</option>
-              <option value="refurbished">Відновлений</option>
             </select>
           </div>
           <div class="form-field required">
@@ -450,7 +450,7 @@
         </div>
         <div class="form-actions">
           <button type="submit" class="btn-primary"><i class="fas fa-save"></i> <span id="submitBtnText">Зберегти товар</span></button>
-          <button type="button" class="btn-secondary" onclick="showSection('products')">Скасувати</button>
+          <button type="button" class="btn-secondary" onclick="leaveProductForm('products')">Скасувати</button>
         </div>
       </form>
     </div>
@@ -1161,6 +1161,10 @@ function setCompatibility(compat) {
   }
 }
 
+let formDirty = false;
+
+function markFormDirty() { formDirty = true; }
+
 function resetForm() {
   document.getElementById('editId').value='';
   document.getElementById('productForm').reset();
@@ -1171,6 +1175,18 @@ function resetForm() {
   existingImages = [];
   newImageFiles = [];
   setCompatibility([]);
+  formDirty = false;
+}
+
+function leaveProductForm(target) {
+  if (formDirty) {
+    showConfirm('Незбережені зміни', 'Є незбережені зміни. Вийти без збереження?', () => {
+      formDirty = false;
+      showSection(target);
+    }, null, 'Так, вийти');
+  } else {
+    showSection(target);
+  }
 }
 
 let savedPage = 1;
@@ -1278,8 +1294,10 @@ async function submitProduct(e) {
 
     const url = id ? `/api/products/${id}` : '/api/products';
     const method = id ? 'PUT' : 'POST';
-    await fetch(url, {method, body:fd});
+    const res = await fetch(url, {method, body:fd});
+    if (!res.ok) throw new Error('server error');
 
+    formDirty = false;
     showToast(id ? 'Товар оновлено!' : 'Товар додано!', 'success');
     btn.disabled = false;
     btn.innerHTML = `<i class="fas fa-save"></i> ${id?'Зберегти зміни':'Зберегти товар'}`;
@@ -1301,7 +1319,7 @@ function deleteProduct(id, name) {
     document.getElementById('confirmModal').style.display='none';
     await fetch('/api/products/'+id,{method:'DELETE'});
     showToast('Товар видалено','success');
-    loadProducts();
+    loadProducts(currentPage);
   };
 }
 
@@ -1482,8 +1500,8 @@ function filterOrders() {
       (o.customerPhone||'').includes(q)
     )) return false;
     if(status && o.status!==status) return false;
-    if(dateFrom && o.createdAt < dateFrom) return false;
-    if(dateTo && o.createdAt.slice(0,10) > dateTo) return false;
+    if(dateFrom && (o.createdAt||'') < dateFrom) return false;
+    if(dateTo && (o.createdAt||'').slice(0,10) > dateTo) return false;
     return true;
   });
   renderOrders();
@@ -1856,11 +1874,12 @@ async function loadAccessLog() {
   }
 }
 
-function showConfirm(title, text, onOk, onCancel) {
+function showConfirm(title, text, onOk, onCancel, okLabel) {
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmText').textContent = text;
   document.getElementById('confirmModal').style.display = 'flex';
   const okBtn = document.getElementById('confirmOkBtn');
+  okBtn.textContent = okLabel || 'Так, видалити';
   const cancelBtn = document.getElementById('confirmCancelBtn');
   okBtn.onclick = () => { document.getElementById('confirmModal').style.display='none'; onOk(); };
   cancelBtn.onclick = () => { document.getElementById('confirmModal').style.display='none'; if(onCancel) onCancel(); };
