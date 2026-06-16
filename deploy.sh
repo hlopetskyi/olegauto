@@ -5,7 +5,7 @@
 set -e
 
 SERVER="167.233.90.80"
-SSH_KEY="/tmp/olegauto_key"
+SSH_KEY="$HOME/.ssh/olegauto_deploy"
 REMOTE_DIR="/root/olegauto"
 LOCAL_DIR="$(dirname "$0")/local-server"
 
@@ -41,10 +41,12 @@ scp $SSH_OPTS -r \
   "$LOCAL_DIR/public" \
   "root@$SERVER:$REMOTE_DIR/"
 
-# Copy data files individually — NEVER overwrite admins.json (managed only on server via UI)
-ssh $SSH_OPTS root@$SERVER "mkdir -p $REMOTE_DIR/data"
-scp $SSH_OPTS "$LOCAL_DIR/data/products.json" "root@$SERVER:$REMOTE_DIR/data/"
-scp $SSH_OPTS "$LOCAL_DIR/data/orders.json" "root@$SERVER:$REMOTE_DIR/data/" 2>/dev/null || true
+# Data files live only on server — managed via admin UI. NEVER overwrite from local.
+# Bootstrap: create empty files on first deploy if they don't exist yet.
+ssh $SSH_OPTS root@$SERVER "mkdir -p $REMOTE_DIR/data && \
+  [ -f $REMOTE_DIR/data/products.json ] || echo '[]' > $REMOTE_DIR/data/products.json && \
+  [ -f $REMOTE_DIR/data/orders.json ]   || echo '[]' > $REMOTE_DIR/data/orders.json && \
+  [ -f $REMOTE_DIR/data/admins.json ]   || echo '[]' > $REMOTE_DIR/data/admins.json"
 
 echo "==> Installing dependencies..."
 ssh $SSH_OPTS root@$SERVER "cd $REMOTE_DIR && npm install --omit=dev"
