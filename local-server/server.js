@@ -165,7 +165,7 @@ function nextId(arr) {
 // ============ PRODUCTS API ============
 app.get('/api/products', (req, res) => {
   let products = readData('products.json');
-  const { brand, category, condition, inStock, search, sort, carBrand, carModel, yearFrom, yearTo, priceMin, priceMax } = req.query;
+  const { brand, category, condition, inStock, search, sort, carBrand, carModel, carEngine, yearFrom, yearTo, priceMin, priceMax } = req.query;
 
   if (brand) products = products.filter(p => p.brand === brand);
   if (carBrand) products = products.filter(p => {
@@ -175,6 +175,10 @@ app.get('/api/products', (req, res) => {
   if (carModel) products = products.filter(p => {
     const compat = p.compatibility && p.compatibility.length ? p.compatibility : [{brand: p.brand, model: p.model}];
     return compat.some(c => (c.model || '').toLowerCase() === carModel.toLowerCase());
+  });
+  if (carEngine) products = products.filter(p => {
+    const compat = p.compatibility && p.compatibility.length ? p.compatibility : [];
+    return compat.some(c => (c.engine || '').toLowerCase() === carEngine.toLowerCase());
   });
   if (category) products = products.filter(p => p.category === category);
   if (condition && condition !== 'all') products = products.filter(p => p.condition === condition);
