@@ -835,6 +835,84 @@ const CAR_MODELS = {
 
 const BRANDS = Object.keys(CAR_MODELS);
 
+const CAR_MODEL_YEARS = {
+  'Renault': {
+    'Clio I':'1990–1998','Clio II':'1998–2005','Clio III':'2005–2012','Clio IV':'2012–2019','Clio V':'2019–...',
+    'Megane I':'1995–2002','Megane II':'2002–2008','Megane III':'2008–2016','Megane IV':'2016–...',
+    'Laguna I':'1993–2001','Laguna II':'2001–2007','Laguna III':'2007–2015',
+    'Scenic I':'1996–2003','Scenic II':'2003–2009','Scenic III':'2009–2016','Scenic IV':'2016–2023',
+    'Kangoo I':'1997–2007','Kangoo II':'2007–2021','Kangoo III':'2021–...',
+    'Trafic II':'2001–2014','Trafic III':'2014–...',
+    'Master II':'1998–2010','Master III':'2010–...',
+    'Duster I':'2010–2018','Duster II':'2018–...',
+    'Captur I':'2013–2019','Captur II':'2019–...',
+    'Kadjar':'2015–2022','Koleos':'2008–2016',
+    'Symbol':'2002–2012','Thalia':'2001–2013',
+    'Twingo I':'1993–2007','Twingo II':'2007–2014','Twingo III':'2014–...',
+    'Espace III':'1996–2002','Espace IV':'2002–2015',
+    'Vel Satis':'2002–2009','Fluence':'2010–2017','Latitude':'2010–2015','Zoe':'2012–...',
+    'Logan I':'2004–2013','Logan II':'2013–...',
+    'Sandero I':'2008–2013','Sandero II':'2013–...',
+  },
+  'Peugeot': {
+    '106':'1991–2004','107':'2005–2014','108':'2014–2021',
+    '205':'1983–1998','206':'1998–2012','206+':'2009–2013',
+    '207':'2006–2012','208 I':'2012–2019','208 II':'2019–...',
+    '301':'2012–...','306':'1993–2002','307':'2001–2008',
+    '308 I':'2007–2013','308 II':'2013–...',
+    '309':'1985–1993','405':'1987–1997','406':'1995–2004','407':'2004–2011','408':'2010–2018',
+    '508 I':'2011–2018','508 II':'2018–...',
+    '605':'1989–1999','607':'2000–2010','1007':'2004–2009',
+    '2008 I':'2013–2019','2008 II':'2019–...',
+    '3008 I':'2009–2016','3008 II':'2016–...',
+    '4007':'2007–2012','4008':'2012–2017',
+    '5008 I':'2009–2017','5008 II':'2017–...',
+    'Bipper':'2008–2016',
+    'Partner I':'1996–2002','Partner II':'2002–2015','Partner III':'2015–...',
+    'Expert II':'2007–2016','Expert III':'2016–...',
+    'Boxer II':'2002–2014','Boxer III':'2014–...',
+    'RCZ':'2010–2015','Traveller':'2016–...',
+  },
+  'Citroën': {
+    'AX':'1986–1998','BX':'1982–1994',
+    'C1 I':'2005–2014','C1 II':'2014–2022',
+    'C2':'2003–2009',
+    'C3 I':'2002–2009','C3 II':'2009–2016','C3 III':'2016–...',
+    'C3 Aircross':'2017–...','C3 Picasso':'2008–2017',
+    'C4 I':'2004–2010','C4 II':'2010–2018','C4 III':'2020–...','C4 Cactus':'2014–...',
+    'C4 Grand Picasso I':'2006–2013','C4 Grand Picasso II':'2013–2018',
+    'C4 Picasso I':'2006–2013','C4 Picasso II':'2013–2018',
+    'C5 I':'2001–2008','C5 II':'2008–2017','C5 III':'2022–...','C5 X':'2022–...',
+    'C6':'2005–2012','C8':'2002–2014',
+    'C-Crosser':'2007–2012','C-Elysée':'2012–...',
+    'DS3':'2009–2019','DS4':'2011–2015','DS5':'2011–2018',
+    'Berlingo I':'1996–2008','Berlingo II':'2008–2018','Berlingo III':'2018–...',
+    'Jumpy II':'2007–2016','Jumpy III':'2016–...',
+    'Jumper II':'2002–2014','Jumper III':'2014–...',
+    'Nemo':'2007–2014','Saxo':'1996–2003',
+    'Xantia':'1992–2001','Xsara':'1997–2004','Xsara Picasso':'1999–2010','ZX':'1991–1998',
+  },
+  'Fiat': {
+    '500':'2007–...','500L':'2012–...','500X':'2014–...',
+    'Barchetta':'1995–2005',
+    'Bravo I':'1995–2001','Bravo II':'2007–2014','Brava':'1995–2001',
+    'Cinquecento':'1991–1998','Croma':'2005–2011',
+    'Doblo I':'2001–2010','Doblo II':'2010–...',
+    'Ducato II':'2002–2014','Ducato III':'2014–...',
+    'Fiorino':'2007–...','Freemont':'2011–2016','Grande Punto':'2005–2012',
+    'Idea':'2003–2010','Linea':'2007–2015','Marea':'1996–2002',
+    'Multipla':'1998–2010','Palio':'1996–2012',
+    'Panda I':'1980–2003','Panda II':'2003–2012','Panda III':'2012–...',
+    'Punto I':'1993–1999','Punto II':'1999–2010','Punto III':'2010–2018',
+    'Qubo':'2008–2020',
+    'Scudo II':'2007–2016','Scudo III':'2016–...',
+    'Sedici':'2006–2014','Seicento':'1998–2010','Stilo':'2001–2010',
+    'Strada':'1999–...','Tempra':'1990–1996',
+    'Tipo I':'1987–1995','Tipo II':'2015–...',
+    'Ulysse':'1994–2011','Uno':'1983–1995',
+  },
+};
+
 const CAR_ENGINES = {
   'Renault': {
     'Clio I':    ['1.2 8v 55hp (C3G)','1.4 8v 75hp (E7J)','1.8 8v 90hp (F3P)','1.9 D 64hp (F8Q)'],
@@ -973,7 +1051,11 @@ function brandOptions(selected) {
 
 function modelOptions(brand, selected) {
   const models = CAR_MODELS[brand] || [];
-  return models.map(m => `<option value="${m}"${m===selected?' selected':''}>${m}</option>`).join('');
+  const years = CAR_MODEL_YEARS[brand] || {};
+  return models.map(m => {
+    const yr = years[m] ? ` (${years[m]})` : '';
+    return `<option value="${m}"${m===selected?' selected':''}>${m}${yr}</option>`;
+  }).join('');
 }
 
 let _compatRowId = 0;
@@ -985,42 +1067,53 @@ function engineOptions(brand, model) {
 function onBrandChange(brandSel) {
   const row = brandSel.closest('.compat-row');
   const modelSel = row.querySelector('.compat-model');
-  const engineInput = row.querySelector('.compat-engine');
   const brand = brandSel.value;
   modelSel.innerHTML = `<option value="">— модель —</option>${modelOptions(brand, '')}`;
   modelSel.disabled = !brand;
-  if (engineInput) { engineInput.value = ''; engineInput.disabled = true; }
   updateEngineSuggestions(row, brand, '');
+  const engineSel = row.querySelector('.compat-engine');
+  if (engineSel) engineSel.disabled = true;
 }
 
 function onModelChange(modelSel) {
   const row = modelSel.closest('.compat-row');
-  const engineInput = row.querySelector('.compat-engine');
   const brand = row.querySelector('.compat-brand').value;
   const model = modelSel.value;
-  if (engineInput) {
-    engineInput.disabled = !model;
-    engineInput.value = '';
-  }
   updateEngineSuggestions(row, brand, model);
+  const engineSel = row.querySelector('.compat-engine');
+  if (engineSel) {
+    const hasEngines = engineOptions(brand, model).length > 0;
+    engineSel.disabled = !model || !hasEngines;
+  }
+  if (model && CAR_MODEL_YEARS[brand] && CAR_MODEL_YEARS[brand][model]) {
+    const [from, to] = CAR_MODEL_YEARS[brand][model].split('–');
+    const fromEl = document.getElementById('fYearFrom');
+    const toEl = document.getElementById('fYearTo');
+    if (fromEl && !fromEl.value) fromEl.value = from || '';
+    if (toEl && !toEl.value && to && to !== '...') toEl.value = to;
+  }
+}
+
+function engineSelectOptions(brand, model, selected) {
+  const engines = engineOptions(brand, model);
+  if (!engines.length) return '';
+  return engines.map(e => `<option value="${e}"${e===selected?' selected':''}>${e}</option>`).join('');
 }
 
 function updateEngineSuggestions(row, brand, model) {
-  const dlId = row.dataset.dlid;
-  const dl = document.getElementById('dl-' + dlId);
-  if (!dl) return;
+  const engineSel = row.querySelector('.compat-engine');
+  if (!engineSel) return;
   const engines = engineOptions(brand, model);
-  dl.innerHTML = engines.map(e => `<option value="${e}">`).join('');
+  engineSel.innerHTML = `<option value="">— двигун —</option>${engines.map(e=>`<option value="${e}">${e}</option>`).join('')}`;
 }
 
 function addCompatRow(brand='', model='', engine='') {
   const list = document.getElementById('compatList');
   const row = document.createElement('div');
   row.className = 'compat-row';
-  const dlId = ++_compatRowId;
-  row.dataset.dlid = dlId;
   row.style = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
   const engines = engineOptions(brand, model);
+  const hasEngines = engines.length > 0;
   row.innerHTML = `
     <select class="form-control compat-brand" style="flex:0 0 140px" onchange="onBrandChange(this)">
       <option value="">— бренд —</option>
@@ -1030,8 +1123,10 @@ function addCompatRow(brand='', model='', engine='') {
       <option value="">— модель —</option>
       ${modelOptions(brand, model)}
     </select>
-    <input type="text" class="form-control compat-engine" list="dl-${dlId}" placeholder="Двигун" value="${engine}" ${!model?'disabled':''} style="flex:1;min-width:160px">
-    <datalist id="dl-${dlId}">${engines.map(e=>`<option value="${e}">`).join('')}</datalist>
+    <select class="form-control compat-engine" style="flex:1;min-width:160px" ${!model||!hasEngines?'disabled':''}>
+      <option value="">— двигун —</option>
+      ${engineSelectOptions(brand, model, engine)}
+    </select>
     <button type="button" onclick="this.closest('.compat-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:4px 8px;flex-shrink:0"><i class="fas fa-times"></i></button>`;
   list.appendChild(row);
 }
