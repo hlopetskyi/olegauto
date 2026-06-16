@@ -1591,7 +1591,7 @@ function deleteOrderFromModal() {
     'Видалити замовлення',
     `Видалити замовлення #${id} (${o.customerName||'—'})? Дію неможливо скасувати.`,
     async () => {
-      await fetch(`/api/orders/${id}`, { method: 'DELETE', headers: authHeader() });
+      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
       allOrders = allOrders.filter(x=>x.id!==id);
       closeOrderModal();
       renderOrdersTable();
