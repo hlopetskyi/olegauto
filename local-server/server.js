@@ -597,6 +597,22 @@ ${productUrls.join('\n')}
 </urlset>`);
 });
 
+// ============ CONTACT ============
+app.post('/api/contact', (req, res) => {
+  const contacts = readData('contacts.json');
+  const msg = {
+    id: Date.now(),
+    name: req.body.name || '',
+    contact: req.body.contact || '',
+    message: req.body.message || '',
+    createdAt: new Date().toISOString(),
+    read: false
+  };
+  contacts.unshift(msg);
+  writeData('contacts.json', contacts);
+  res.json({ ok: true });
+});
+
 // ============ PAGES ============
 app.get('/admin', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/admin/*', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));

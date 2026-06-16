@@ -547,7 +547,7 @@
 <!-- =================== PRODUCT DETAIL PAGE =================== -->
 <div class="page" id="page-product">
   <div class="product-detail">
-    <button class="back-btn" onclick="history.back(); showPage(prevPage||'catalog')"><i class="fas fa-arrow-left"></i> Назад</button>
+    <button class="back-btn" onclick="showPage(prevPage||'catalog')"><i class="fas fa-arrow-left"></i> Назад</button>
     <div id="productDetailContent">
       <div class="loading"><div class="spinner"></div></div>
     </div>
@@ -645,6 +645,8 @@ let catalogCarBrand = '';
 let catalogCarModel = '';
 let catalogCarEngine = '';
 let allCatalogProducts = [];
+const CATALOG_PAGE_SIZE = 12;
+let catalogPage = 0;
 
 const CAR_MODELS = {
   'Renault': ['Clio I','Clio II','Clio III','Clio IV','Clio V','Megane I','Megane II','Megane III','Megane IV','Laguna I','Laguna II','Laguna III','Scenic I','Scenic II','Scenic III','Scenic IV','Kangoo I','Kangoo II','Kangoo III','Trafic II','Trafic III','Master II','Master III','Duster I','Duster II','Captur I','Captur II','Kadjar','Koleos','Symbol','Thalia','Twingo I','Twingo II','Twingo III','Espace III','Espace IV','Vel Satis','Fluence','Latitude','Zoe','Logan I','Logan II','Sandero I','Sandero II'],
@@ -963,6 +965,7 @@ function updateFinderModels() {
     const yr=years[m]?` (${years[m]})`:'';
     return `<option value="${m}">${m}${yr}</option>`;
   }).join('');
+  modelSel.disabled = false;
   if(engineSel){ engineSel.innerHTML='<option value="">— всі двигуни —</option>'; engineSel.disabled=true; }
 }
 
@@ -1087,15 +1090,33 @@ async function loadCatalogProducts() {
   if(priceMax) url += `&priceMax=${priceMax}`;
 
   try {
-    const products = await api(url);
+    allCatalogProducts = await api(url);
+    catalogPage = 0;
     renderActiveFilters(activeCarBrand,activeCarModel,activeCarEngine,category,catalogCondition,catalogInStock,search,yearFrom,yearTo,priceMin,priceMax);
-    document.getElementById('resultsInfo').textContent = `Знайдено ${products.length} товар${pluralUa(products.length)}`;
-    if(!products.length){
+    document.getElementById('resultsInfo').textContent = `Знайдено ${allCatalogProducts.length} товар${pluralUa(allCatalogProducts.length)}`;
+    if(!allCatalogProducts.length){
       el.innerHTML='<div class="empty-state"><i class="fas fa-search" style="font-size:48px;margin-bottom:16px;opacity:.3;display:block"></i><h3>Нічого не знайдено</h3><p>Спробуйте змінити фільтри</p></div>';
       return;
     }
-    el.innerHTML = '<div class="product-grid">'+products.map(renderProductCard).join('')+'</div>';
+    el.innerHTML = '<div class="product-grid"></div><div id="loadMoreWrap" style="text-align:center;margin-top:24px"></div>';
+    appendCatalogPage();
   } catch(e) { el.innerHTML = '<p style="color:red;padding:20px">Помилка завантаження</p>'; }
+}
+
+function appendCatalogPage() {
+  const grid = document.querySelector('#catalogProducts .product-grid');
+  const wrap = document.getElementById('loadMoreWrap');
+  if(!grid) return;
+  const start = catalogPage * CATALOG_PAGE_SIZE;
+  const slice = allCatalogProducts.slice(start, start + CATALOG_PAGE_SIZE);
+  grid.innerHTML += slice.map(renderProductCard).join('');
+  catalogPage++;
+  const shown = catalogPage * CATALOG_PAGE_SIZE;
+  if(shown < allCatalogProducts.length) {
+    wrap.innerHTML = `<button class="btn-outline" onclick="appendCatalogPage()"><i class="fas fa-chevron-down"></i> Показати ще (${allCatalogProducts.length - shown})</button>`;
+  } else {
+    wrap.innerHTML = '';
+  }
 }
 
 function pluralUa(n) {
@@ -1272,21 +1293,39 @@ async function loadProductDetail(id) {
       <button class="btn-primary" id="addToCartBtn" onclick="addToCartFromDetail(${p.id})" ${p.stock<=0?'disabled style="opacity:.5;cursor:not-allowed"':''}>
         <i class="fas fa-shopping-cart"></i> Додати в кошик
       </button>
+      <button class="btn-outline" onclick="copyProductLink('${SITE}/#product-${p.id}')" style="margin-top:10px">
+        <i class="fas fa-share-alt"></i> Поділитися
+      </button>
     </div>
   </div>
 </div>`;
 
-    // Related products
-    const related = await api(`/api/products?brand=${encodeURIComponent(p.brand)}`);
-    const others = related.filter(r=>r.id!==p.id).slice(0,4);
+    // Related products — by category first, fallback brand
+    const relatedCat = await api(`/api/products?category=${encodeURIComponent(p.category)}`);
+    let others = relatedCat.filter(r=>r.id!==p.id).slice(0,4);
+    if(!others.length) {
+      const relatedBrand = await api(`/api/products?brand=${encodeURIComponent(p.brand)}`);
+      others = relatedBrand.filter(r=>r.id!==p.id).slice(0,4);
+    }
     if(others.length) {
       el.innerHTML += `
 <div style="margin-top:50px">
-  <h2 style="font-size:20px;font-weight:700;margin-bottom:20px">Схожі товари (${p.brand})</h2>
+  <h2 style="font-size:20px;font-weight:700;margin-bottom:20px">Схожі товари (${p.category})</h2>
   <div class="product-grid" style="grid-template-columns:repeat(4,1fr)">${others.map(renderProductCard).join('')}</div>
 </div>`;
     }
   } catch(e) { el.innerHTML='<p style="color:red;padding:20px">Помилка завантаження товару</p>'; }
+}
+
+function copyProductLink(url) {
+  if(navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(()=>showToast('Посилання скопійовано','success'));
+  } else {
+    const t = document.createElement('textarea');
+    t.value = url; document.body.appendChild(t); t.select();
+    document.execCommand('copy'); document.body.removeChild(t);
+    showToast('Посилання скопійовано','success');
+  }
 }
 
 // ============ CART ============
@@ -1301,7 +1340,10 @@ function addToCartFromDetail(id) {
 
 function addToCart(id) {
   fetch('/api/products/'+id).then(r=>r.json()).then(p=>{
+    if(p.stock<=0){ showToast('Товар відсутній на складі','error'); return; }
     const idx = cart.findIndex(c=>c.id===id);
+    const inCart = idx>=0 ? cart[idx].qty : 0;
+    if(inCart>=p.stock){ showToast(`В наявності лише ${p.stock} шт`,'error'); return; }
     if(idx>=0) cart[idx].qty++;
     else cart.push({id:p.id,name:p.name,price:p.price,image:p.image,category:p.category,brand:p.brand,model:p.model,article:p.article||'',qty:1});
     saveCart();
@@ -1378,6 +1420,7 @@ function renderCart() {
       <h3>Підсумок</h3>
       <div class="sum-row"><span>Товарів (${cart.reduce((s,c)=>s+c.qty,0)} шт)</span><span>€${subtotal.toLocaleString('de-DE')}</span></div>
       <div class="sum-total"><span>Разом</span><span style="color:var(--orange)">€${total.toLocaleString('de-DE')}</span></div>
+      <div style="font-size:12px;color:var(--gray-500);margin:12px 0;line-height:1.5"><i class="fas fa-truck" style="margin-right:4px"></i>Доставка Новою Поштою — оплачується окремо при отриманні</div>
       <button class="btn-checkout" onclick="document.getElementById('checkoutForm').scrollIntoView({behavior:'smooth'})">
         <i class="fas fa-arrow-down"></i> Оформити замовлення
       </button>
@@ -1417,7 +1460,8 @@ async function submitOrder() {
   };
 
   try {
-    await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const res = await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!res.ok) throw new Error('server error');
     cart = [];
     saveCart();
     showModal(`
@@ -1450,15 +1494,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
 });
 
 // ============ CONTACTS ============
-function sendContact() {
+async function sendContact() {
   const n = document.getElementById('cName').value.trim();
   const c = document.getElementById('cContact').value.trim();
   const m = document.getElementById('cMsg').value.trim();
   if(!n||!c||!m){ showToast('Заповніть усі поля','error'); return; }
-  document.getElementById('cName').value='';
-  document.getElementById('cContact').value='';
-  document.getElementById('cMsg').value='';
-  showToast('Повідомлення надіслано! Ми зв\'яжемося з вами.','success');
+  try {
+    const res = await fetch('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,contact:c,message:m})});
+    if(!res.ok) throw new Error();
+    document.getElementById('cName').value='';
+    document.getElementById('cContact').value='';
+    document.getElementById('cMsg').value='';
+    showToast('Повідомлення надіслано! Ми зв\'яжемося з вами.','success');
+  } catch(e) { showToast('Помилка відправки. Спробуйте ще раз.','error'); }
 }
 
 // ============ TOAST ============
