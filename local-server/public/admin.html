@@ -505,6 +505,7 @@
         </div>
         <div style="display:flex;gap:8px">
           <button onclick="printOrder()" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600"><i class="fas fa-print"></i> Друк</button>
+          <button onclick="deleteOrderFromModal()" style="background:rgba(220,38,38,.7);border:none;color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600"><i class="fas fa-trash"></i> Видалити</button>
           <button onclick="closeOrderModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:18px"><i class="fas fa-times"></i></button>
         </div>
       </div>
@@ -1578,7 +1579,24 @@ function openOrderModal(id) {
     </div>`;
 
   document.getElementById('orderModal').style.display = 'block';
+  document.getElementById('orderModal').dataset.orderId = o.id;
   document.body.style.overflow = 'hidden';
+}
+
+function deleteOrderFromModal() {
+  const id = parseInt(document.getElementById('orderModal').dataset.orderId);
+  const o = allOrders.find(x=>x.id===id);
+  if(!o) return;
+  showConfirm(
+    'Видалити замовлення',
+    `Видалити замовлення #${id} (${o.customerName||'—'})? Дію неможливо скасувати.`,
+    async () => {
+      await fetch(`/api/orders/${id}`, { method: 'DELETE', headers: authHeader() });
+      allOrders = allOrders.filter(x=>x.id!==id);
+      closeOrderModal();
+      renderOrdersTable();
+    }
+  );
 }
 
 function closeOrderModal() {

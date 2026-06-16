@@ -504,6 +504,15 @@ app.put('/api/orders/:id/status', (req, res) => {
   res.json(orders[idx]);
 });
 
+app.delete('/api/orders/:id', requireAuth, (req, res) => {
+  const orders = readData('orders.json');
+  const idx = orders.findIndex(o => o.id === parseInt(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  orders.splice(idx, 1);
+  writeData('orders.json', orders);
+  res.json({ ok: true });
+});
+
 // ============ STATS API ============
 app.get('/api/stats', (req, res) => {
   const products = readData('products.json');
