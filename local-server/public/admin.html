@@ -1594,7 +1594,7 @@ function deleteOrderFromModal() {
       await fetch(`/api/orders/${id}`, { method: 'DELETE' });
       allOrders = allOrders.filter(x=>x.id!==id);
       closeOrderModal();
-      renderOrdersTable();
+      filterOrders();
     }
   );
 }
