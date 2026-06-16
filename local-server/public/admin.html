@@ -294,7 +294,11 @@
             <option value="">Будь-який стан</option>
             <option value="new">Новий</option>
             <option value="used">Б/У</option>
-            <option value="refurbished">Відновлений</option>
+          </select>
+          <select id="filterDateSort" onchange="filterProductsTable()">
+            <option value="">Звичайне</option>
+            <option value="newest">Спочатку нові</option>
+            <option value="oldest">Спочатку старіші</option>
           </select>
           <select id="filterStock" onchange="filterProductsTable()">
             <option value="">Будь-який залишок</option>
@@ -702,6 +706,7 @@ function applyProductFilter() {
   const cat = document.getElementById('filterCategory')?.value || '';
   const cond = document.getElementById('filterCondition')?.value || '';
   const stock = document.getElementById('filterStock')?.value || '';
+  const dateSort = document.getElementById('filterDateSort')?.value || '';
   filteredProducts = allProducts.filter(p => {
     if (q && !((p.name||'').toLowerCase().includes(q)||(p.brand||'').toLowerCase().includes(q)||(p.article||'').toLowerCase().includes(q)||(p.oem||'').toLowerCase().includes(q)||(p.model||'').toLowerCase().includes(q))) return false;
     if (cat && p.category !== cat) return false;
@@ -711,7 +716,13 @@ function applyProductFilter() {
     if (stock === 'low' && p.stock !== 1) return false;
     return true;
   });
-  if (sortCol) {
+  if (dateSort) {
+    filteredProducts.sort((a,b) => {
+      const da = new Date(a.createdAt||0).getTime();
+      const db = new Date(b.createdAt||0).getTime();
+      return dateSort === 'newest' ? db - da : da - db;
+    });
+  } else if (sortCol) {
     filteredProducts.sort((a,b) => {
       let av=a[sortCol], bv=b[sortCol];
       if(sortCol==='condition'){const o={new:0,refurbished:1,used:2};av=o[av]??3;bv=o[bv]??3;}
@@ -746,6 +757,7 @@ function resetTableFilters() {
   document.getElementById('prodSearch').value = '';
   document.getElementById('filterCategory').value = '';
   document.getElementById('filterCondition').value = '';
+  document.getElementById('filterDateSort').value = '';
   document.getElementById('filterStock').value = '';
   filterProductsTable();
 }
