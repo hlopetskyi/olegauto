@@ -144,12 +144,15 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
-// Data helpers
+// In-memory cache: avoids re-reading JSON from disk on every request
+const _cache = {};
 function readData(file) {
+  if (_cache[file]) return _cache[file];
   const fp = path.join(__dirname, 'data', file);
   if (!fs.existsSync(fp)) return [];
   try {
-    return JSON.parse(fs.readFileSync(fp, 'utf8'));
+    _cache[file] = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    return _cache[file];
   } catch (e) {
     return [];
   }
@@ -157,6 +160,7 @@ function readData(file) {
 function writeData(file, data) {
   const fp = path.join(__dirname, 'data', file);
   fs.writeFileSync(fp, JSON.stringify(data, null, 2));
+  _cache[file] = data; // update cache in-place — no stale reads
 }
 function nextId(arr) {
   return arr.length === 0 ? 1 : Math.max(...arr.map(x => x.id)) + 1;
