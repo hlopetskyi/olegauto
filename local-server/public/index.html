@@ -680,30 +680,30 @@
             </div>
           </div>
           <div class="info-item">
-            <div class="info-icon"><i class="fas fa-clock"></i></div>
-            <div>
-              <div class="info-label">Графік роботи</div>
-              <div class="info-val">Пн–Пт 9:00–18:00, Сб 9:00–14:00, Нд — вихідний</div>
-            </div>
           </div>
         </div>
       </div>
       <div>
         <div class="contact-form">
-          <h3>Написати нам</h3>
-          <div class="form-field">
-            <label>Ваше ім'я</label>
-            <input type="text" id="cName" placeholder="Іван Петрович">
+          <h3>Графік роботи</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:15px">
+            <tr style="border-bottom:1px solid var(--gray-200)">
+              <td style="padding:12px 0;color:var(--gray-600)">Понеділок — П'ятниця</td>
+              <td style="padding:12px 0;font-weight:700;text-align:right">09:00 — 18:00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--gray-200)">
+              <td style="padding:12px 0;color:var(--gray-600)">Субота</td>
+              <td style="padding:12px 0;font-weight:700;text-align:right">09:00 — 14:00</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 0;color:var(--gray-600)">Неділя</td>
+              <td style="padding:12px 0;font-weight:700;text-align:right;color:var(--red,#dc2626)">Вихідний</td>
+            </tr>
+          </table>
+          <div style="margin-top:20px;padding:14px;background:#fff;border-radius:10px;border:1.5px solid var(--gray-200);font-size:14px;color:var(--gray-600);line-height:1.6">
+            <i class="fas fa-info-circle" style="color:var(--blue);margin-right:6px"></i>
+            Замовлення прийняті після 18:00 опрацьовуємо наступного робочого дня.
           </div>
-          <div class="form-field">
-            <label>Телефон або email</label>
-            <input type="text" id="cContact" placeholder="+380671234567">
-          </div>
-          <div class="form-field">
-            <label>Повідомлення</label>
-            <textarea id="cMsg" rows="5" placeholder="Ваше запитання..."></textarea>
-          </div>
-          <button class="btn-send" onclick="sendContact()"><i class="fas fa-paper-plane"></i> Надіслати</button>
         </div>
       </div>
     </div>
@@ -1022,6 +1022,23 @@ window.addEventListener('load', () => {
   updateCartBadge();
   handlePath();
   loadCurrencyRates();
+});
+
+document.addEventListener('input', e => {
+  if (e.target.id === 'oPhone') {
+    if (!e.target.value.startsWith('+380')) {
+      e.target.value = '+380' + e.target.value.replace(/^\+?3?8?0?/, '');
+    }
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'oPhone') {
+    const v = e.target.value;
+    const pos = e.target.selectionStart;
+    if ((e.key === 'Backspace' || e.key === 'Delete') && v.length <= 4 && pos <= 4) {
+      e.preventDefault();
+    }
+  }
 });
 
 // ============ API ============
@@ -1507,8 +1524,8 @@ function renderCart() {
     <div class="checkout-form" id="checkoutForm">
       <h3><i class="fas fa-clipboard-list" style="color:var(--orange);margin-right:8px"></i>Оформити замовлення</h3>
       <div class="form-row">
-        <div class="form-field"><label>Ім'я та прізвище *</label><input type="text" id="oName" placeholder="Іван Петрович" required></div>
-        <div class="form-field"><label>Телефон *</label><input type="tel" id="oPhone" placeholder="+380671234567" required></div>
+        <div class="form-field"><label>Ім'я та прізвище *</label><input type="text" id="oName" placeholder="" required></div>
+        <div class="form-field"><label>Телефон *</label><input type="tel" id="oPhone" value="+380" required></div>
       </div>
       <div class="form-row">
         <div class="form-field"><label>Місто</label><input type="text" id="oCity" placeholder="Київ"></div>
@@ -1520,7 +1537,7 @@ function renderCart() {
           </select>
         </div>
       </div>
-      <div class="form-field"><label>Коментар</label><textarea id="oComment" rows="3" placeholder="Номер відділення НП, час дзвінка..."></textarea></div>
+      <div class="form-field"><label>Коментар</label><textarea id="oComment" rows="3" placeholder=""></textarea></div>
       <button class="btn-checkout" onclick="submitOrder()"><i class="fas fa-check"></i> Підтвердити замовлення</button>
     </div>
   </div>
