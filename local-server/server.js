@@ -444,7 +444,20 @@ app.get('/api/orders', (req, res) => {
   res.json(readData('orders.json'));
 });
 
-app.post('/api/orders', (req, res) => {
+const TG_TOKEN = process.env.TG_TOKEN;
+const TG_CHAT  = process.env.TG_CHAT;
+
+async function sendTelegram(text) {
+  try {
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TG_CHAT, text, parse_mode: 'HTML' })
+    });
+  } catch(e) { console.error('Telegram error:', e.message); }
+}
+
+app.post('/api/orders', async (req, res) => {
   const orders = readData('orders.json');
   const order = {
     id: nextId(orders),
@@ -455,6 +468,16 @@ app.post('/api/orders', (req, res) => {
   orders.unshift(order);
   writeData('orders.json', orders);
   res.json(order);
+
+  const items = (order.items||[]).map(i=>`  • ${i.name} × ${i.qty} — €${i.price}`).join('\n');
+  const msg = `🛒 <b>Нове замовлення #${order.id}</b>\n\n`
+    + `👤 ${order.customerName}\n`
+    + `📞 ${order.customerPhone}\n`
+    + `🏙 ${order.city||'—'} / ${order.delivery==='nova_poshta'?'Нова Пошта':'Самовивіз'}\n`
+    + (order.comment ? `💬 ${order.comment}\n` : '')
+    + `\n<b>Товари:</b>\n${items}\n\n`
+    + `💰 <b>Сума: €${order.total}</b>`;
+  sendTelegram(msg);
 });
 
 app.put('/api/orders/:id/status', (req, res) => {
