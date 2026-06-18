@@ -1495,6 +1495,11 @@ async function submitOrder() {
     if(!res.ok) throw new Error('server error');
     cart = [];
     saveCart();
+    gtag('event', 'conversion', {
+      'send_to': 'AW-18238999254/TMK6CKSh0MEcENaVhP1D',
+      'value': subtotal,
+      'currency': 'UAH'
+    });
     showModal(`
 <div class="modal-icon">🎉</div>
 <h2>Замовлення прийнято!</h2>
