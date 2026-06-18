@@ -602,9 +602,10 @@
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:13px;color:var(--gray-500);white-space:nowrap">Ціна €:</span>
-            <input type="number" class="filter-select" id="filterPriceMin" placeholder="від" min="0" style="width:90px" onchange="applyFilters()">
+            <input type="number" class="filter-select" id="filterPriceMin" placeholder="від" min="0" style="width:90px" onkeydown="if(event.key==='Enter')applyFilters()">
             <span style="color:var(--gray-400)">—</span>
-            <input type="number" class="filter-select" id="filterPriceMax" placeholder="до" min="0" style="width:90px" onchange="applyFilters()">
+            <input type="number" class="filter-select" id="filterPriceMax" placeholder="до" min="0" style="width:90px" onkeydown="if(event.key==='Enter')applyFilters()">
+            <button onclick="applyFilters()" style="background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">OK</button>
           </div>
           <button onclick="resetAllFilters()" style="background:none;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 14px;font-size:13px;color:var(--gray-500);cursor:pointer;margin-left:auto" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--gray-200)';this.style.color='var(--gray-500)'"><i class="fas fa-times"></i> Скинути фільтри</button>
         </div>
@@ -1588,6 +1589,7 @@ async function submitOrder() {
   try {
     const res = await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!res.ok) throw new Error('server error');
+    const order = await res.json();
     cart = [];
     saveCart();
     gtag('event', 'conversion', {
@@ -1598,6 +1600,7 @@ async function submitOrder() {
     showModal(`
 <div class="modal-icon">🎉</div>
 <h2>Замовлення прийнято!</h2>
+<p style="font-size:13px;color:var(--gray-500);margin-bottom:8px">Номер замовлення: <strong style="font-size:16px;color:var(--blue)">#${order.id}</strong></p>
 <p>Дякуємо, ${name}! Ми зв'яжемося з вами за номером<br><strong>${phone}</strong> найближчим часом.</p>
 <p style="color:var(--gray-400);font-size:13px;margin-top:12px">Повернення на головну через <span id="redirectCountdown">3</span> сек...</p>`);
     let sec = 3;
@@ -1611,9 +1614,26 @@ async function submitOrder() {
 }
 
 // ============ SEARCH ============
+const SEARCH_ALIASES = {
+  'рено': 'Renault', 'рено': 'Renault', 'renault': 'Renault',
+  'пежо': 'Peugeot', 'пежо': 'Peugeot', 'peugeot': 'Peugeot',
+  'сітроєн': 'Citroen', 'ситроен': 'Citroen', 'цитроен': 'Citroen', 'citroen': 'Citroen',
+  'фіат': 'Fiat', 'фиат': 'Fiat', 'fiat': 'Fiat',
+  'ніссан': 'Nissan', 'нисан': 'Nissan', 'nissan': 'Nissan',
+  'опель': 'Opel', 'opel': 'Opel',
+  'дачія': 'Dacia', 'дача': 'Dacia', 'dacia': 'Dacia',
+};
+
+function normalizeSearch(q) {
+  const lower = q.toLowerCase().trim();
+  return SEARCH_ALIASES[lower] || q;
+}
+
 function doSearch() {
-  const q = document.getElementById('headerSearch').value.trim();
-  if(!q) return;
+  const raw = document.getElementById('headerSearch').value.trim();
+  if(!raw) return;
+  const q = normalizeSearch(raw);
+  document.getElementById('headerSearch').value = q;
   showPage('catalog');
   loadCatalogProducts();
 }
