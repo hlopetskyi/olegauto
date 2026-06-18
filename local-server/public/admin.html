@@ -217,6 +217,15 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- CONFIRM MODAL -->
+  <div class="modal-overlay" id="photoLightbox" style="display:none;background:rgba(0,0,0,.85)" onclick="if(event.target===this)this.style.display='none'">
+    <div style="position:relative;max-width:90vw;max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:12px">
+      <button onclick="document.getElementById('photoLightbox').style.display='none'" style="position:absolute;top:-36px;right:0;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;line-height:1">×</button>
+      <img id="lightboxMain" src="" style="max-width:80vw;max-height:70vh;object-fit:contain;border-radius:8px;background:#111">
+      <div id="lightboxThumbs" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"></div>
+      <div id="lightboxCount" style="color:#aaa;font-size:13px"></div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="confirmModal" style="display:none">
     <div class="modal">
       <h3 id="confirmTitle">Підтвердити дію</h3>
@@ -785,8 +794,13 @@ function renderProductsTable() {
   if(sa){sa.checked=allChecked;sa.indeterminate=!allChecked&&someChecked;}
 
   tbody.innerHTML = page.map(p=>{
+    const allImgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
+    const imgCount = allImgs.length;
     const imgHtml = p.image
-      ? `<div class="prod-thumb"><img src="${p.image}" alt=""></div>`
+      ? `<div class="prod-thumb" style="cursor:pointer;position:relative" onclick='showPhotoLightbox(${JSON.stringify({image:p.image,images:allImgs})})' title="Переглянути фото (${imgCount})">
+           <img src="${p.image}" alt="">
+           ${imgCount>1?`<span style="position:absolute;bottom:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;border-radius:3px;padding:1px 4px">${imgCount}</span>`:''}
+         </div>`
       : `<div class="prod-thumb">${CAT_EMOJI[p.category]||'🔧'}</div>`;
     const stockCls = p.stock===0?'stock-out':p.stock<2?'stock-low':'stock-ok';
     const stockTxt = p.stock===0?'Немає':p.stock+' шт';
@@ -842,8 +856,8 @@ function goPage(n) {
 // ============ ADD / EDIT ============
 const CAR_MODELS = {
   'Renault': ['Clio I','Clio II','Clio III','Clio IV','Clio V','Megane I','Megane II','Megane III','Megane IV','Laguna I','Laguna II','Laguna III','Scenic I','Scenic II','Scenic III','Scenic IV','Kangoo I','Kangoo II','Kangoo III','Trafic II','Trafic III','Master II','Master III','Duster I','Duster II','Captur I','Captur II','Kadjar','Koleos','Symbol','Thalia','Twingo I','Twingo II','Twingo III','Espace III','Espace IV','Vel Satis','Fluence','Latitude','Zoe','Logan I','Logan II','Sandero I','Sandero II'],
-  'Peugeot': ['106','107','108','205','206','206+','207','208 I','208 II','301','306','307','308 I','308 II','309','405','406','407','408','508 I','508 II','605','607','1007','2008 I','2008 II','3008 I','3008 II','4007','4008','5008 I','5008 II','Bipper','Partner I','Partner II','Partner III','Expert II','Expert III','Boxer II','Boxer III','RCZ','Traveller'],
-  'Citroën': ['AX','BX','C1 I','C1 II','C2','C3 I','C3 II','C3 III','C3 Aircross','C3 Picasso','C4 I','C4 II','C4 III','C4 Cactus','C4 Grand Picasso I','C4 Grand Picasso II','C4 Picasso I','C4 Picasso II','C5 I','C5 II','C5 III','C5 X','C6','C8','C-Crosser','C-Elysée','DS3','DS4','DS5','Berlingo I','Berlingo II','Berlingo III','Jumpy II','Jumpy III','Jumper II','Jumper III','Nemo','Saxo','Xantia','Xsara','Xsara Picasso','ZX'],
+  'Peugeot': ['106','107','108','205','206','206+','207','208 I','208 II','301','306','307','308 I','308 II','309','405','406','407','408','508 I','508 II','605','607','1007','2008 I','2008 II','3008 I','3008 II','4007','4008','5008 I','5008 II','Bipper','Partner I','Partner II','Partner III','Expert I','Expert II','Expert III','Boxer II','Boxer III','RCZ','Traveller'],
+  'Citroën': ['AX','BX','C1 I','C1 II','C2','C3 I','C3 II','C3 III','C3 Aircross','C3 Picasso','C4 I','C4 II','C4 III','C4 Cactus','C4 Grand Picasso I','C4 Grand Picasso II','C4 Picasso I','C4 Picasso II','C5 I','C5 II','C5 III','C5 X','C6','C8','C-Crosser','C-Elysée','DS3','DS4','DS5','Berlingo I','Berlingo II','Berlingo III','Jumpy I','Jumpy II','Jumpy III','Jumper II','Jumper III','Nemo','Saxo','Xantia','Xsara','Xsara Picasso','ZX'],
   'Fiat': ['500','500L','500X','Barchetta','Bravo I','Bravo II','Brava','Cinquecento','Croma','Doblo I','Doblo II','Ducato II','Ducato III','Fiorino','Freemont','Grande Punto','Idea','Linea','Marea','Multipla','Palio','Panda I','Panda II','Panda III','Punto I','Punto II','Punto III','Qubo','Scudo II','Scudo III','Sedici','Seicento','Stilo','Strada','Tempra','Tipo I','Tipo II','Ulysse','Uno'],
 };
 
@@ -883,7 +897,7 @@ const CAR_MODEL_YEARS = {
     '5008 I':'2009–2017','5008 II':'2017–...',
     'Bipper':'2008–2016',
     'Partner I':'1996–2002','Partner II':'2002–2015','Partner III':'2015–...',
-    'Expert II':'2007–2016','Expert III':'2016–...',
+    'Expert I':'1995–2007','Expert II':'2007–2016','Expert III':'2016–...',
     'Boxer II':'2002–2014','Boxer III':'2014–...',
     'RCZ':'2010–2015','Traveller':'2016–...',
   },
@@ -901,7 +915,7 @@ const CAR_MODEL_YEARS = {
     'C-Crosser':'2007–2012','C-Elysée':'2012–...',
     'DS3':'2009–2019','DS4':'2011–2015','DS5':'2011–2018',
     'Berlingo I':'1996–2008','Berlingo II':'2008–2018','Berlingo III':'2018–...',
-    'Jumpy II':'2007–2016','Jumpy III':'2016–...',
+    'Jumpy I':'1994–2006','Jumpy II':'2007–2016','Jumpy III':'2016–...',
     'Jumper II':'2002–2014','Jumper III':'2014–...',
     'Nemo':'2007–2014','Saxo':'1996–2003',
     'Xantia':'1992–2001','Xsara':'1997–2004','Xsara Picasso':'1999–2010','ZX':'1991–1998',
@@ -987,6 +1001,7 @@ const CAR_ENGINES = {
     'Partner I': ['1.4 8v 75hp (TU3JP)','1.6 16v 110hp (TU5JP4)','1.9 D 70hp (DW8)','2.0 HDi 90hp (DW10TD)'],
     'Partner II':['1.4 8v 75hp (TU3JP)','1.6 16v 110hp (TU5JP4)','1.6 HDi 75hp (DV6BUTED4)','1.6 HDi 90hp (DV6TED4)','1.6 HDi 110hp (DV6TED4)'],
     'Partner III':['1.2 PureTech 110hp (EB2DTS)','1.5 BlueHDi 75hp (DV5R)','1.5 BlueHDi 100hp (DV5R)','1.5 BlueHDi 130hp (DV5RC)'],
+    'Expert I':  ['1.8 8v 90hp (XU7JP)','2.0 8v 121hp (XU10J2)','1.9 D 69hp (DJY)','1.9 TD 92hp (DHX)','2.0 HDi 109hp (RHX)'],
     'Expert II': ['1.6 HDi 90hp (DV6)','2.0 HDi 120hp (DW10)','2.0 HDi 128hp (DW10)'],
     'Expert III':['1.6 BlueHDi 95hp (DV6FC)','1.6 BlueHDi 115hp (DV6FC)','2.0 BlueHDi 120hp (DW10FC)','2.0 BlueHDi 150hp (DW10FC)','2.0 BlueHDi 180hp (DW10FD)'],
     'Boxer II':  ['2.0 8v 110hp (EW10J4)','2.2 HDi 100hp (4HY)','2.8 HDi 127hp (8140.43S)','3.0 HDi 140hp (F1CE)'],
@@ -1018,6 +1033,7 @@ const CAR_ENGINES = {
     'Berlingo I':['1.4 8v 75hp (TU3JP)','1.6 8v 90hp (TU5JP)','1.4 HDi 68hp (8HX)','1.9 D 69hp (WJY)','2.0 HDi 90hp (DW10TD)'],
     'Berlingo II':['1.4 8v 75hp (TU3JP)','1.6 16v 109hp (TU5JP4)','1.6 HDi 75hp (DV6BUTED4)','1.6 HDi 90hp (DV6TED4)','1.6 HDi 110hp (DV6TED4)'],
     'Berlingo III':['1.2 PureTech 110hp (EB2DTS)','1.5 BlueHDi 75hp (DV5R)','1.5 BlueHDi 100hp (DV5R)','1.5 BlueHDi 130hp (DV5RC)'],
+    'Jumpy I':   ['1.8 8v 90hp (XU7JP)','2.0 8v 121hp (XU10J2)','1.9 D 69hp (DJY)','1.9 TD 92hp (DHX)','2.0 HDi 109hp (RHX)'],
     'Jumpy II':  ['1.6 HDi 90hp (DV6)','2.0 HDi 120hp (DW10)','2.0 HDi 128hp (DW10)'],
     'Jumpy III': ['1.6 BlueHDi 95hp (DV6FC)','1.6 BlueHDi 115hp (DV6FC)','2.0 BlueHDi 120hp (DW10FC)','2.0 BlueHDi 150hp (DW10FC)','2.0 BlueHDi 180hp (DW10FD)'],
     'Jumper II': ['2.0 HDi 110hp (DW10)','2.2 HDi 100hp (4HY)','2.8 HDi 127hp (8140.43S)','3.0 HDi 140hp (F1CE)'],
@@ -1908,6 +1924,28 @@ async function loadAccessLog() {
   } catch(e) {
     el.innerHTML = `<div style="color:var(--danger)">Помилка завантаження: ${e.message}</div>`;
   }
+}
+
+function showPhotoLightbox(p) {
+  const imgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
+  if (!imgs.length) return;
+  let cur = 0;
+  const main = document.getElementById('lightboxMain');
+  const thumbs = document.getElementById('lightboxThumbs');
+  const count = document.getElementById('lightboxCount');
+  const setCur = i => {
+    cur = i;
+    main.src = imgs[i];
+    count.textContent = `${i+1} / ${imgs.length}`;
+    thumbs.querySelectorAll('img').forEach((t,ti) => t.style.outline = ti===i ? '2px solid #fff' : 'none');
+  };
+  main.src = imgs[0];
+  count.textContent = `1 / ${imgs.length}`;
+  thumbs.innerHTML = imgs.map((src,i) =>
+    `<img src="${src}" onclick="(function(){${i}===0?void 0:void 0})()" style="width:60px;height:60px;object-fit:cover;border-radius:5px;cursor:pointer;outline:${i===0?'2px solid #fff':'none'}">`
+  ).join('');
+  thumbs.querySelectorAll('img').forEach((t,i) => t.onclick = () => setCur(i));
+  document.getElementById('photoLightbox').style.display = 'flex';
 }
 
 function showConfirm(title, text, onOk, onCancel, okLabel) {
