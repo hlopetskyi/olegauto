@@ -886,7 +886,7 @@ function updateMeta({ title, desc, image, url, jsonLd } = {}) {
   if(ld && jsonLd) ld.textContent = JSON.stringify(jsonLd);
 }
 
-function showPage(name, opts={}) {
+function showPage(name, opts={}, noPush=false) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('nav button').forEach(b=>{
@@ -895,11 +895,18 @@ function showPage(name, opts={}) {
   });
   prevPage = currentPage;
   currentPage = name;
-  window.location.hash = name;
+  if (!noPush) {
+    let url = '/';
+    if (name==='catalog') url = '/catalog';
+    else if (name==='contacts') url = '/contacts';
+    else if (name==='cart') url = '/cart';
+    else if (name==='product' && opts.id) url = '/product/'+opts.id;
+    history.pushState({name, opts}, '', url);
+  }
   window.scrollTo(0,0);
 
   if(name==='home') { updateMeta({ url: SITE+'/' }); loadHomeProducts(); }
-  if(name==='contacts') updateMeta({ title:'Контакти — OlegAvto', desc:'Зв\'яжіться з нами для консультації по запчастинам для Renault, Peugeot, Citroën, Fiat.', url: SITE+'/#contacts' });
+  if(name==='contacts') updateMeta({ title:'Контакти — OlegAvto', desc:'Зв\'яжіться з нами для консультації по запчастинам для Renault, Peugeot, Citroën, Fiat.', url: SITE+'/contacts' });
   if(name==='catalog') {
     if(opts.brand){ document.getElementById('filterBrand').value=opts.brand; }
     if(opts.condition){ setCondFilterVal(opts.condition); }
@@ -929,16 +936,23 @@ function showPage(name, opts={}) {
   if(name==='cart') renderCart();
 }
 
-function handleHash() {
-  const h = location.hash.replace('#','');
-  if(h.startsWith('product-')) showPage('product',{id:parseInt(h.replace('product-',''))});
-  else if(['home','catalog','cart','contacts'].includes(h)) showPage(h);
+function handlePath() {
+  const p = location.pathname;
+  if (p.startsWith('/product/')) showPage('product', {id: parseInt(p.replace('/product/',''))}, true);
+  else if (p === '/catalog') showPage('catalog', {}, true);
+  else if (p === '/contacts') showPage('contacts', {}, true);
+  else if (p === '/cart') showPage('cart', {}, true);
+  else showPage('home', {}, true);
 }
 
-window.addEventListener('hashchange', handleHash);
-window.addEventListener('load', ()=>{
+window.addEventListener('popstate', e => {
+  if (e.state) showPage(e.state.name, e.state.opts || {}, true);
+  else handlePath();
+});
+window.addEventListener('load', () => {
   updateCartBadge();
-  if(location.hash) handleHash(); else loadHomeProducts();
+  handlePath();
+  loadCurrencyRates();
 });
 
 // ============ API ============
@@ -1229,8 +1243,7 @@ function renderProductCard(p) {
 // ============ PRODUCT DETAIL ============
 function openProduct(id) {
   prevPage = currentPage;
-  showPage('product',{id});
-  window.location.hash = 'product-'+id;
+  showPage('product', {id});
 }
 
 async function loadProductDetail(id) {
@@ -1257,7 +1270,7 @@ async function loadProductDetail(id) {
       title: `${p.name} — OlegAvto`,
       desc: metaDesc,
       image: imgs[0] || '',
-      url: `${SITE}/#product-${p.id}`,
+      url: `${SITE}/product/${p.id}`,
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'Product',
@@ -1271,7 +1284,7 @@ async function loadProductDetail(id) {
           price: p.price,
           priceCurrency: 'EUR',
           availability: p.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-          url: `${SITE}/#product-${p.id}`,
+          url: `${SITE}/product/${p.id}`,
           seller: { '@type': 'Organization', name: 'OlegAvto' }
         }
       }
@@ -1302,7 +1315,7 @@ async function loadProductDetail(id) {
       <button class="btn-primary" id="addToCartBtn" onclick="addToCartFromDetail(${p.id})" ${p.stock<=0?'disabled style="opacity:.5;cursor:not-allowed"':''}>
         <i class="fas fa-shopping-cart"></i> Додати в кошик
       </button>
-      <button class="btn-outline" onclick="copyProductLink('${SITE}/#product-${p.id}')" style="margin-top:10px">
+      <button class="btn-outline" onclick="copyProductLink('${SITE}/product/${p.id}')" style="margin-top:10px">
         <i class="fas fa-share-alt"></i> Поділитися
       </button>
     </div>
@@ -1538,8 +1551,6 @@ async function loadCurrencyRates() {
     });
   } catch(e) {}
 }
-loadCurrencyRates();
-
 // ============ TOAST ============
 function showToast(msg, type='') {
   const el = document.createElement('div');

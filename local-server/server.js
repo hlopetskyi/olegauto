@@ -582,9 +582,9 @@ app.get('/robots.txt', (req, res) => {
 
 app.get('/sitemap.xml', (req, res) => {
   const products = readData('products.json');
-  const staticPages = [['', '1.0'], ['#catalog', '0.7'], ['#contacts', '0.7']];
+  const staticPages = [['', '1.0'], ['catalog', '0.7'], ['contacts', '0.7']];
   const productUrls = products.map(p =>
-    `  <url><loc>${SITE_URL}/#product-${p.id}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`
+    `  <url><loc>${SITE_URL}/product/${p.id}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`
   );
   const staticUrls = staticPages.map(([p, pri]) =>
     `  <url><loc>${SITE_URL}/${p}</loc><changefreq>daily</changefreq><priority>${pri}</priority></url>`
