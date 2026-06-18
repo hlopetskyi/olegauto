@@ -297,7 +297,54 @@
     .hero{padding:36px 16px}
     .hero h1{font-size:26px}
     .form-row{grid-template-columns:1fr}
+    .header-phone{display:none}
   }
+  /* Header phone */
+  .header-phone{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px;color:var(--blue);text-decoration:none;white-space:nowrap}
+  .header-phone:hover{color:var(--orange)}
+  .header-phone i{font-size:13px}
+  /* Floating contact button */
+  .fab-wrap{position:fixed;bottom:24px;right:24px;z-index:999}
+  .fab-main{display:flex;align-items:center;gap:8px;padding:13px 20px;border-radius:50px;font-weight:700;font-size:14px;color:#fff;background:var(--blue);border:none;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:transform .15s,box-shadow .15s}
+  .fab-main:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.3)}
+  .fab-menu{display:none;flex-direction:column;gap:8px;margin-bottom:10px;align-items:flex-end}
+  .fab-menu.open{display:flex}
+  .fab-menu a{display:flex;align-items:center;gap:8px;padding:11px 18px;border-radius:50px;font-weight:700;font-size:14px;text-decoration:none;color:#fff;box-shadow:0 3px 12px rgba(0,0,0,.2);transition:transform .15s}
+  .fab-menu a:hover{transform:translateY(-2px)}
+  .fab-menu .fab-phone{background:var(--blue)}
+  .fab-menu .fab-viber{background:#7360f2}
+  @media(max-width:640px){
+    .fab-wrap{bottom:16px;right:16px}
+    .fab-main{padding:14px;border-radius:50%;width:54px;height:54px;justify-content:center}
+    .fab-main span{display:none}
+    .fab-menu a{padding:12px;border-radius:50%;width:50px;height:50px;justify-content:center}
+    .fab-menu a span{display:none}
+    .fab-menu a i{font-size:18px}
+  }
+  /* Breadcrumb */
+  .breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray-500);margin-bottom:16px;flex-wrap:wrap}
+  .breadcrumb a{color:var(--blue);text-decoration:none;cursor:pointer}
+  .breadcrumb a:hover{text-decoration:underline}
+  .breadcrumb .bc-sep{color:var(--gray-300)}
+  /* Product detail actions */
+  .detail-cart-btn{width:100%;padding:16px;font-size:16px}
+  .detail-secondary-btns{display:flex;gap:10px;margin-top:10px}
+  .btn-secondary-action{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 16px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;font-weight:600;color:var(--gray-700);background:#fff;cursor:pointer;transition:border-color .15s,background .15s}
+  .btn-secondary-action:hover{border-color:var(--blue);color:var(--blue);background:var(--gray-50)}
+  .detail-contact-wrap{flex:1;position:relative}
+  .detail-contact-wrap .btn-secondary-action{width:100%}
+  .detail-contact-menu{display:none;position:absolute;bottom:calc(100% + 8px);left:0;background:#fff;border:1.5px solid var(--gray-200);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.12);overflow:hidden;min-width:200px;z-index:10}
+  .detail-contact-menu.open{display:block}
+  .detail-contact-menu a{display:flex;align-items:center;gap:10px;padding:12px 16px;font-size:14px;font-weight:600;text-decoration:none;color:var(--gray-700);transition:background .15s}
+  .detail-contact-menu a:hover{background:var(--gray-50)}
+  .detail-contact-menu a i.fa-phone{color:var(--blue)}
+  .detail-contact-menu a i.fa-viber{color:#7360f2}
+  .btn-share-icon{display:flex;align-items:center;justify-content:center;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:16px;color:var(--gray-500);background:#fff;cursor:pointer;transition:border-color .15s,color .15s;flex-shrink:0}
+  .btn-share-icon:hover{border-color:var(--blue);color:var(--blue)}
+  /* Out of stock notify */
+  .notify-stock{margin-top:12px;padding:14px;background:var(--gray-50);border:1.5px dashed var(--gray-300);border-radius:10px;font-size:14px}
+  .notify-stock p{margin:0 0 8px;color:var(--gray-600)}
+  .notify-stock a{color:var(--blue);font-weight:600;text-decoration:none}
 </style>
 </head>
 <body>
@@ -309,6 +356,7 @@
       <div class="logo-title">OlegAvto</div>
       <div class="logo-sub">Запчастини для французьких авто</div>
     </div>
+    <a href="tel:+380677448965" class="header-phone"><i class="fas fa-phone"></i> +38 067 744 8965</a>
     <div class="header-search">
       <input type="text" id="headerSearch" placeholder="Пошук: назва, OEM, артикул..." onkeydown="if(event.key==='Enter')doSearch()">
       <button onclick="doSearch()"><i class="fas fa-search"></i></button>
@@ -326,6 +374,17 @@
     </button>
   </div>
 </header>
+
+<!-- FLOATING CONTACT BUTTON -->
+<div class="fab-wrap">
+  <div class="fab-menu" id="fabMenu">
+    <a href="tel:+380677448965" class="fab-phone"><i class="fas fa-phone"></i><span>Зателефонувати</span></a>
+    <a href="viber://chat?number=%2B380677448965" class="fab-viber"><i class="fab fa-viber"></i><span>Viber</span></a>
+  </div>
+  <button class="fab-main" onclick="document.getElementById('fabMenu').classList.toggle('open')">
+    <i class="fas fa-headset"></i><span>Зв'язатися</span>
+  </button>
+</div>
 
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toastContainer"></div>
@@ -563,6 +622,7 @@
 <!-- =================== PRODUCT DETAIL PAGE =================== -->
 <div class="page" id="page-product">
   <div class="product-detail">
+    <div class="breadcrumb" id="productBreadcrumb"></div>
     <button class="back-btn" onclick="showPage(prevPage||'catalog')"><i class="fas fa-arrow-left"></i> Назад</button>
     <div id="productDetailContent">
       <div class="loading"><div class="spinner"></div></div>
@@ -1260,6 +1320,12 @@ async function loadProductDetail(id) {
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const p = await api('/api/products/'+id);
+    // breadcrumb
+    const bc = document.getElementById('productBreadcrumb');
+    if(bc) {
+      const brand = (p.compatibility&&p.compatibility[0]?.brand)||p.brand||'';
+      bc.innerHTML = `<a onclick="showPage('home')">Головна</a><span class="bc-sep">›</span><a onclick="showPage('catalog')">Каталог</a>${brand?`<span class="bc-sep">›</span><a onclick="showPage('catalog');setTimeout(()=>{document.getElementById('filterBrand').value='${brand}';onFilterBrandChange();},100)">${brand}</a>`:''}<span class="bc-sep">›</span><span>${p.name}</span>`;
+    }
     const imgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
     const imgHtml = imgs.length
       ? `<div>
@@ -1321,12 +1387,24 @@ async function loadProductDetail(id) {
     </div>
     ${p.description?`<div class="detail-desc">${p.description}</div>`:''}
     <div class="detail-actions">
-      <button class="btn-primary" id="addToCartBtn" onclick="addToCartFromDetail(${p.id})" ${p.stock<=0?'disabled style="opacity:.5;cursor:not-allowed"':''}>
+      <button class="btn-primary detail-cart-btn" id="addToCartBtn" onclick="addToCartFromDetail(${p.id})" ${p.stock<=0?'disabled style="opacity:.5;cursor:not-allowed"':''}>
         <i class="fas fa-shopping-cart"></i> Додати в кошик
       </button>
-      <button class="btn-outline" onclick="copyProductLink('${SITE}/product/${p.id}')" style="margin-top:10px">
-        <i class="fas fa-share-alt"></i> Поділитися
-      </button>
+      ${p.stock<=0?`<div class="notify-stock"><p>Товар тимчасово відсутній. Напишіть нам — повідомимо як з'явиться:</p><a href="viber://chat?number=%2B380677448965"><i class="fab fa-viber"></i> Написати у Viber</a></div>`:''}
+      <div class="detail-secondary-btns">
+        <div class="detail-contact-wrap">
+          <button class="btn-secondary-action" onclick="this.nextElementSibling.classList.toggle('open')">
+            <i class="fas fa-headset"></i> Зв'язатися
+          </button>
+          <div class="detail-contact-menu">
+            <a href="tel:+380677448965"><i class="fas fa-phone"></i> Зателефонувати</a>
+            <a href="viber://chat?number=%2B380677448965"><i class="fab fa-viber"></i> Viber</a>
+          </div>
+        </div>
+        <button class="btn-share-icon" onclick="copyProductLink('${SITE}/product/${p.id}')" title="Поділитися">
+          <i class="fas fa-share-alt"></i>
+        </button>
+      </div>
     </div>
   </div>
 </div>`;
