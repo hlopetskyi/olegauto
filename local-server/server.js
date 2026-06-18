@@ -598,6 +598,32 @@ ${productUrls.join('\n')}
 });
 
 // ============ CONTACT ============
+let _currencyCache = null;
+let _currencyCacheTs = 0;
+const GOVERLA_QUERY = `query Point($alias: Alias!) { point(alias: $alias) { updatedAt rates { currency { codeAlpha exponent } bid { absolute } ask { absolute } } } }`;
+app.get('/api/currency', async (req, res) => {
+  try {
+    if (_currencyCache && Date.now() - _currencyCacheTs < 3600000) {
+      return res.json(_currencyCache);
+    }
+    const r = await fetch('https://api.goverla.ua/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Origin': 'https://goverla.ua', 'Referer': 'https://goverla.ua/' },
+      body: JSON.stringify({ query: GOVERLA_QUERY, variables: { alias: 'goverla-ua' } })
+    });
+    const json = await r.json();
+    const rates = json.data.point.rates
+      .filter(x => ['USD','EUR'].includes(x.currency.codeAlpha))
+      .map(x => {
+        const exp = Math.pow(10, x.currency.exponent || 2);
+        return { ccy: x.currency.codeAlpha, buy: (x.bid.absolute / exp).toFixed(2), sale: (x.ask.absolute / exp).toFixed(2) };
+      });
+    _currencyCache = rates;
+    _currencyCacheTs = Date.now();
+    res.json(rates);
+  } catch(e) { res.status(502).json({error:'fetch failed'}); }
+});
+
 app.post('/api/contact', (req, res) => {
   const contacts = readData('contacts.json');
   const msg = {

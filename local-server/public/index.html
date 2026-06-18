@@ -46,6 +46,12 @@
   img{max-width:100%;display:block}
 
   /* HEADER */
+  .currency-widget{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--gray-600);line-height:1.3;min-width:90px}
+  .currency-widget .cw-row{display:flex;gap:4px;align-items:center}
+  .currency-widget .cw-code{font-weight:700;color:var(--blue);width:26px}
+  .currency-widget .cw-buy{color:var(--green,#16a34a)}
+  .currency-widget .cw-sell{color:var(--red,#dc2626)}
+  .currency-widget .cw-sep{color:var(--gray-300)}
   header{background:#fff;border-bottom:2px solid var(--blue);position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
   .header-inner{max-width:1280px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:16px;height:64px}
   .logo{display:flex;flex-direction:column;min-width:150px}
@@ -303,6 +309,7 @@
       <button onclick="showPage('catalog')" id="nav-catalog">Каталог</button>
       <button onclick="showPage('contacts')" id="nav-contacts">Контакти</button>
     </nav>
+    <div class="currency-widget" id="currencyWidget"></div>
     <button class="cart-btn" onclick="showPage('cart')">
       <i class="fas fa-shopping-cart"></i>
       Кошик
@@ -1510,6 +1517,28 @@ async function sendContact() {
     showToast('Повідомлення надіслано! Ми зв\'яжемося з вами.','success');
   } catch(e) { showToast('Помилка відправки. Спробуйте ще раз.','error'); }
 }
+
+// ============ CURRENCY WIDGET ============
+async function loadCurrencyRates() {
+  try {
+    const res = await fetch('/api/currency');
+    if (!res.ok) return;
+    const data = await res.json();
+    const widget = document.getElementById('currencyWidget');
+    if (!widget) return;
+    ['USD','EUR'].forEach(code => {
+      const r = data.find(x => x.ccy === code);
+      if (!r) return;
+      widget.innerHTML += `<div class="cw-row">
+        <span class="cw-code">${code}</span>
+        <span class="cw-buy" title="Купівля">${parseFloat(r.buy).toFixed(2)}</span>
+        <span class="cw-sep">/</span>
+        <span class="cw-sell" title="Продаж">${parseFloat(r.sale).toFixed(2)}</span>
+      </div>`;
+    });
+  } catch(e) {}
+}
+loadCurrencyRates();
 
 // ============ TOAST ============
 function showToast(msg, type='') {
