@@ -1505,7 +1505,6 @@ async function loadProductDetail(id) {
     <div style="margin-bottom:16px;font-size:14px">${stockLabel}</div>
     <div class="detail-attrs">
       ${p.oem?`<div class="attr-row"><span class="attr-label">OEM номер</span><span class="attr-value">${p.oem}</span></div>`:''}
-      ${p.article?`<div class="attr-row"><span class="attr-label">Артикул</span><span class="attr-value">${p.article}</span></div>`:''}
       ${(()=>{const compat=p.compatibility&&p.compatibility.length?p.compatibility:(p.brand?[{brand:p.brand,model:p.model}]:[]);return compat.length?`<div class="attr-row"><span class="attr-label">Сумісні авто</span><span class="attr-value">${compat.map(c=>c.model?`${c.brand} ${c.model}`:c.brand).join('<br>')}</span></div>`:''})()}
       ${p.yearFrom?`<div class="attr-row"><span class="attr-label">Роки випуску</span><span class="attr-value">${p.yearFrom}–${p.yearTo||'...'}</span></div>`:''}
       <div class="attr-row"><span class="attr-label">Стан</span><span class="attr-value">${COND_LABELS[p.condition]||p.condition}</span></div>
