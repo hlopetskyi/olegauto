@@ -612,13 +612,6 @@
     </div>
   </div>
 
-  <!-- SCHEDULE ON HOME -->
-  <div style="background:#fff;border-top:1.5px solid var(--gray-200);padding:40px 20px">
-    <div style="max-width:480px;margin:0 auto">
-      <h2 style="font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;margin-bottom:20px;text-align:center"><i class="fas fa-clock" style="color:var(--blue);margin-right:8px"></i>Графік роботи</h2>
-      <div id="homeScheduleTable"><div class="loading"><div class="spinner"></div></div></div>
-    </div>
-  </div>
 </div>
 
 <!-- =================== CATALOG PAGE =================== -->
@@ -1066,7 +1059,6 @@ function showPage(name, opts={}, noPush=false) {
   window.scrollTo(0,0);
 
   if(name==='home') { updateMeta({ url: SITE+'/' }); loadHomeProducts(); }
-  if(name==='home') loadSchedule('homeScheduleTable');
   if(name==='contacts') { loadSchedule('scheduleTable'); updateMeta({ title:'Контакти — OlegAvto', desc:'Зв\'яжіться з нами для консультації по запчастинам для Renault, Peugeot, Citroën, Fiat.', url: SITE+'/contacts' }); }
   if(name==='catalog') {
     if(opts.brand){ document.getElementById('filterBrand').value=opts.brand; }
