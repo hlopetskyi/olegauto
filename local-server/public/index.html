@@ -1573,7 +1573,8 @@ function addToCart(id) {
     const inCart = idx>=0 ? cart[idx].qty : 0;
     if(inCart>=p.stock){ showToast(`В наявності лише ${p.stock} шт`,'error'); return; }
     if(idx>=0) cart[idx].qty++;
-    else cart.push({id:p.id,name:p.name,price:p.price,image:p.image,category:p.category,brand:p.brand,model:p.model,article:p.article||'',qty:1});
+    else cart.push({id:p.id,name:p.name,price:p.price,image:p.image,category:p.category,brand:p.brand,model:p.model,article:p.article||'',qty:1,stock:p.stock});
+    if(idx>=0) cart[idx].stock = p.stock;
     saveCart();
     showToast(`"${p.name}" додано до кошика`,'success');
   });
@@ -1623,7 +1624,7 @@ function renderCart() {
   <div class="qty-ctrl">
     <button class="qty-btn" onclick="changeQty(${i},-1)">−</button>
     <span class="qty-val">${c.qty}</span>
-    <button class="qty-btn" onclick="changeQty(${i},1)">+</button>
+    <button class="qty-btn" onclick="changeQty(${i},1)" ${c.stock && c.qty >= c.stock ? 'disabled style="opacity:.35;cursor:not-allowed"' : ''}>+</button>
   </div>
   <div class="cart-item-price">€${(c.price*c.qty).toLocaleString('de-DE')}</div>
   <button class="cart-del" onclick="removeCartItem(${i})" title="Видалити"><i class="fas fa-times"></i></button>
@@ -1679,6 +1680,9 @@ function renderCart() {
 }
 
 function changeQty(i, delta) {
+  if(delta > 0 && cart[i].stock && cart[i].qty >= cart[i].stock) {
+    showToast(`В наявності лише ${cart[i].stock} шт`, 'error'); return;
+  }
   cart[i].qty += delta;
   if(cart[i].qty<=0) cart.splice(i,1);
   saveCart();
