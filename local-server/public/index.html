@@ -1092,7 +1092,7 @@ function showPage(name, opts={}, noPush=false) {
     loadCatalogProducts();
   }
   if(name==='product' && opts.id) loadProductDetail(opts.id);
-  if(name==='cart') renderCart();
+  if(name==='cart') { renderCart(); refreshCartStock(); }
 }
 
 function handlePath() {
@@ -1429,6 +1429,11 @@ async function loadProductDetail(id) {
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const p = await api('/api/products/'+id);
+    if(!p || p.error) {
+      el.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:60px">🔍</div><h2 style="margin:16px 0 8px">Товар не знайдено</h2><p style="color:var(--gray-500);margin-bottom:24px">Можливо, його вже продали або посилання застаріло.</p><button class="btn-primary" onclick="showPage('catalog')"><i class="fas fa-th-large"></i> До каталогу</button></div>`;
+      updateMeta({ title: 'Товар не знайдено — OlegAvto' });
+      return;
+    }
     // breadcrumb
     const bc = document.getElementById('productBreadcrumb');
     if(bc) {
@@ -1595,6 +1600,22 @@ function updateCartBadge() {
     bnavBadge.textContent = total;
     bnavBadge.style.display = total > 0 ? 'flex' : 'none';
   }
+}
+
+async function refreshCartStock() {
+  if(!cart.length) return;
+  await Promise.all(cart.map(async item => {
+    try {
+      const p = await fetch('/api/products/'+item.id).then(r=>r.json());
+      if(p && !p.error) {
+        item.stock = p.stock;
+        if(item.qty > p.stock) { item.qty = Math.max(p.stock, 0); }
+      }
+    } catch(e) {}
+  }));
+  cart = cart.filter(c => c.qty > 0);
+  saveCart();
+  renderCart();
 }
 
 function renderCart() {
@@ -1853,7 +1874,7 @@ function onDeliveryChange() {
   } else {
     npWrap.style.display = 'none';
     whWrap.style.display = 'none';
-    pickupWrap.style.display = '';
+    pickupWrap.style.display = 'block';
   }
 }
 
