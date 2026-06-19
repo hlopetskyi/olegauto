@@ -441,10 +441,7 @@
             <div id="oemList" style="display:flex;flex-direction:column;gap:6px"></div>
             <button type="button" id="oemAddBtn" onclick="addOemRow()" style="margin-top:6px;font-size:13px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;text-align:left"><i class="fas fa-plus"></i> Додати номер</button>
           </div>
-          <div class="form-field">
-            <label>Артикул</label>
-            <input type="text" id="fArticle" placeholder="RE-CLI4-FR">
-          </div>
+          <input type="hidden" id="fArticle" value="">
           <div class="form-field form-full">
             <label>Опис</label>
             <textarea id="fDesc" placeholder="Детальний опис товару, особливості, стан..."></textarea>
