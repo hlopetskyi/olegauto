@@ -1,0 +1,47 @@
+{
+  "schedule": {
+    "mon": {
+      "label": "Понеділок",
+      "open": "09:00",
+      "close": "18:00",
+      "closed": false
+    },
+    "tue": {
+      "label": "Вівторок",
+      "open": "09:00",
+      "close": "18:00",
+      "closed": false
+    },
+    "wed": {
+      "label": "Середа",
+      "open": "09:00",
+      "close": "18:00",
+      "closed": false
+    },
+    "thu": {
+      "label": "Четвер",
+      "open": "09:00",
+      "close": "18:00",
+      "closed": false
+    },
+    "fri": {
+      "label": "П'ятниця",
+      "open": "09:00",
+      "close": "18:00",
+      "closed": false
+    },
+    "sat": {
+      "label": "Субота",
+      "open": "09:00",
+      "close": "14:00",
+      "closed": false
+    },
+    "sun": {
+      "label": "Неділя",
+      "open": "09:00",
+      "close": "18:00",
+      "closed": true
+    }
+  },
+  "scheduleNote": "Замовлення прийняті після 18:00 опрацьовуємо наступного робочого дня."
+}

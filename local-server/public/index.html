@@ -768,24 +768,7 @@
       <div>
         <div class="contact-form">
           <h3>Графік роботи</h3>
-          <table style="width:100%;border-collapse:collapse;font-size:15px">
-            <tr style="border-bottom:1px solid var(--gray-200)">
-              <td style="padding:12px 0;color:var(--gray-600)">Понеділок — П'ятниця</td>
-              <td style="padding:12px 0;font-weight:700;text-align:right">09:00 — 18:00</td>
-            </tr>
-            <tr style="border-bottom:1px solid var(--gray-200)">
-              <td style="padding:12px 0;color:var(--gray-600)">Субота</td>
-              <td style="padding:12px 0;font-weight:700;text-align:right">09:00 — 14:00</td>
-            </tr>
-            <tr>
-              <td style="padding:12px 0;color:var(--gray-600)">Неділя</td>
-              <td style="padding:12px 0;font-weight:700;text-align:right;color:var(--red,#dc2626)">Вихідний</td>
-            </tr>
-          </table>
-          <div style="margin-top:20px;padding:14px;background:#fff;border-radius:10px;border:1.5px solid var(--gray-200);font-size:14px;color:var(--gray-600);line-height:1.6">
-            <i class="fas fa-info-circle" style="color:var(--blue);margin-right:6px"></i>
-            Замовлення прийняті після 18:00 опрацьовуємо наступного робочого дня.
-          </div>
+          <div id="scheduleTable"><div class="loading"><div class="spinner"></div></div></div>
         </div>
       </div>
     </div>
@@ -1065,7 +1048,7 @@ function showPage(name, opts={}, noPush=false) {
   window.scrollTo(0,0);
 
   if(name==='home') { updateMeta({ url: SITE+'/' }); loadHomeProducts(); }
-  if(name==='contacts') updateMeta({ title:'Контакти — OlegAvto', desc:'Зв\'яжіться з нами для консультації по запчастинам для Renault, Peugeot, Citroën, Fiat.', url: SITE+'/contacts' });
+  if(name==='contacts') { loadSchedule(); updateMeta({ title:'Контакти — OlegAvto', desc:'Зв\'яжіться з нами для консультації по запчастинам для Renault, Peugeot, Citroën, Fiat.', url: SITE+'/contacts' }); }
   if(name==='catalog') {
     if(opts.brand){ document.getElementById('filterBrand').value=opts.brand; }
     if(opts.condition){ setCondFilterVal(opts.condition); }
@@ -1132,6 +1115,30 @@ document.addEventListener('keydown', e => {
     }
   }
 });
+
+// ============ SCHEDULE ============
+async function loadSchedule() {
+  const el = document.getElementById('scheduleTable');
+  if(!el) return;
+  try {
+    const s = await api('/api/settings');
+    const days = Object.values(s.schedule || {});
+    const DAYS = ['mon','tue','wed','thu','fri','sat','sun'];
+    const ordered = DAYS.map(k => s.schedule[k]).filter(Boolean);
+    const rows = ordered.map((d, i) => {
+      const isLast = i === ordered.length - 1;
+      const hoursHtml = d.closed
+        ? `<td style="padding:10px 0;font-weight:700;text-align:right;color:var(--red,#dc2626)">Вихідний</td>`
+        : `<td style="padding:10px 0;font-weight:700;text-align:right">${d.open} — ${d.close}</td>`;
+      return `<tr style="${isLast?'':'border-bottom:1px solid var(--gray-200)'}">
+        <td style="padding:10px 0;color:var(--gray-600)">${d.label}</td>
+        ${hoursHtml}
+      </tr>`;
+    }).join('');
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:15px">${rows}</table>
+      ${s.scheduleNote ? `<div style="margin-top:20px;padding:14px;background:#fff;border-radius:10px;border:1.5px solid var(--gray-200);font-size:14px;color:var(--gray-600);line-height:1.6"><i class="fas fa-info-circle" style="color:var(--blue);margin-right:6px"></i>${s.scheduleNote}</div>` : ''}`;
+  } catch(e) { el.innerHTML = ''; }
+}
 
 // ============ API ============
 async function api(url) {

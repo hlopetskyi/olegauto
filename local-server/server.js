@@ -623,6 +623,19 @@ ${productUrls.join('\n')}
 </urlset>`);
 });
 
+// ============ SETTINGS ============
+const SETTINGS_FILE = path.join(__dirname, 'data', 'settings.json');
+function loadSettings() {
+  try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch { return {}; }
+}
+app.get('/api/settings', (req, res) => res.json(loadSettings()));
+app.patch('/api/settings', dynamicAdminAuth, (req, res) => {
+  const current = loadSettings();
+  const updated = Object.assign({}, current, req.body);
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updated, null, 2));
+  res.json(updated);
+});
+
 // ============ NOVA POSHTA PROXY ============
 const NP_API_KEY = process.env.NP_API_KEY || '';
 const NP_URL = 'https://api.novaposhta.ua/v2.0/json/';
