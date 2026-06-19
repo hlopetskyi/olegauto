@@ -810,13 +810,13 @@ function renderProductsTable() {
     return `<tr class="${isLow?'low-stock-row':''}">
       <td><input type="checkbox" class="row-check" value="${p.id}" ${selectedIds.has(p.id)?'checked':''} onchange="toggleSelect(${p.id},this.checked)"></td>
       <td>${imgHtml}</td>
-      <td>
+      <td class="inline-edit-cell" data-pid="${p.id}" data-field="name" data-val="${p.name.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" onclick="inlineEditText(event,+this.dataset.pid,this.dataset.field,this.dataset.val)" title="Клацни для редагування назви">
         <div class="prod-name">${p.name}</div>
         ${p.article?`<div class="prod-meta">Арт: ${p.article}</div>`:''}
       </td>
-      <td>${compat}</td>
-      <td style="color:var(--gray-600);font-size:13px">${p.category}</td>
-      <td><span class="badge ${COND_BADGE[p.condition]||'badge-new'}">${COND_LABELS[p.condition]||p.condition}</span></td>
+      <td class="inline-edit-cell" onclick="inlineEditSelect(event,${p.id},'brand','${p.brand}',BRANDS)" title="Клацни для зміни бренду">${compat}</td>
+      <td class="inline-edit-cell" onclick="inlineEditSelect(event,${p.id},'category','${p.category}',Object.keys(CAT_EMOJI))" title="Клацни для редагування" style="color:var(--gray-600);font-size:13px">${p.category}</td>
+      <td class="inline-edit-cell" onclick="inlineEditSelect(event,${p.id},'condition','${p.condition}',Object.keys(COND_LABELS),COND_LABELS)" title="Клацни для редагування"><span class="badge ${COND_BADGE[p.condition]||'badge-new'}">${COND_LABELS[p.condition]||p.condition}</span></td>
       <td class="inline-edit-cell" onclick="inlineEdit(event,${p.id},'price',${p.price})" title="Клацни для редагування" style="font-weight:700;color:var(--orange)">${p.price.toLocaleString('de-DE')} €</td>
       <td class="inline-edit-cell" onclick="inlineEdit(event,${p.id},'stock',${p.stock})" title="Клацни для редагування"><span class="${stockCls}">${stockTxt}</span></td>
       <td style="white-space:nowrap">
@@ -1469,6 +1469,60 @@ function inlineEdit(event, id, field, currentVal) {
     if(e.key==='Escape'){e.stopPropagation();renderProductsTable();}
   });
   input.addEventListener('click', e=>e.stopPropagation());
+}
+
+function inlineEditText(event, id, field, currentVal) {
+  const cell = event.currentTarget;
+  if(cell.querySelector('input')) return;
+  const input = document.createElement('input');
+  input.type='text'; input.value=currentVal;
+  input.style.cssText='width:200px;padding:4px 8px;border:1.5px solid var(--blue);border-radius:6px;font-size:13px;font-weight:600;outline:none';
+  cell.innerHTML=''; cell.appendChild(input);
+  input.focus(); input.select();
+  const save = async () => {
+    const val = input.value.trim();
+    if(!val){renderProductsTable();return;}
+    await fetch(`/api/products/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:val})});
+    const p = allProducts.find(x=>x.id===id);
+    if(p) p[field]=val;
+    applyProductFilter();
+    renderProductsTable();
+    showToast('Назву оновлено','success');
+  };
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e=>{
+    if(e.key==='Enter'){e.preventDefault();input.blur();}
+    if(e.key==='Escape'){e.stopPropagation();renderProductsTable();}
+  });
+  input.addEventListener('click', e=>e.stopPropagation());
+}
+
+function inlineEditSelect(event, id, field, currentVal, options, labels) {
+  const cell = event.currentTarget;
+  if(cell.querySelector('select')) return;
+  const sel = document.createElement('select');
+  sel.style.cssText='padding:4px 8px;border:1.5px solid var(--blue);border-radius:6px;font-size:13px;outline:none;max-width:140px';
+  options.forEach(o=>{
+    const opt = document.createElement('option');
+    opt.value=o; opt.textContent=labels?.[o]||o;
+    if(o===currentVal) opt.selected=true;
+    sel.appendChild(opt);
+  });
+  cell.innerHTML=''; cell.appendChild(sel);
+  sel.focus();
+  const save = async () => {
+    const val = sel.value;
+    await fetch(`/api/products/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:val})});
+    const p = allProducts.find(x=>x.id===id);
+    if(p) p[field]=val;
+    applyProductFilter();
+    renderProductsTable();
+    showToast(`Оновлено: ${val}`,'success');
+  };
+  sel.addEventListener('blur', save);
+  sel.addEventListener('change', ()=>sel.blur());
+  sel.addEventListener('keydown', e=>{ if(e.key==='Escape'){e.stopPropagation();renderProductsTable();} });
+  sel.addEventListener('click', e=>e.stopPropagation());
 }
 
 // ============ DUPLICATE ============
