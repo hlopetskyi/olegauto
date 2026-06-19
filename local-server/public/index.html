@@ -1116,9 +1116,11 @@ window.addEventListener('load', () => {
 
 document.addEventListener('input', e => {
   if (e.target.id === 'oPhone') {
-    if (!e.target.value.startsWith('+380')) {
-      e.target.value = '+380' + e.target.value.replace(/^\+?3?8?0?/, '');
-    }
+    let v = e.target.value;
+    if (!v.startsWith('+380')) v = '+380' + v.replace(/^\+?3?8?0?/, '');
+    // strip non-digits after +380, limit to 9 digits
+    const digits = v.slice(4).replace(/\D/g, '').slice(0, 9);
+    e.target.value = '+380' + digits;
   }
 });
 document.addEventListener('keydown', e => {
@@ -1699,6 +1701,7 @@ async function submitOrder() {
   const name = document.getElementById('oName').value.trim();
   const phone = document.getElementById('oPhone').value.trim();
   if(!name||!phone){ showToast('Вкажіть ім\'я та телефон','error'); return; }
+  if(phone.replace(/\D/g,'').length < 12){ showToast('Введіть повний номер телефону (9 цифр після +380)','error'); return; }
 
   const delivery = document.getElementById('oDelivery').value;
   const warehouseEl = document.getElementById('oWarehouse');
