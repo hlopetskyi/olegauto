@@ -383,6 +383,10 @@
   .detail-contact-menu a i.fa-viber{color:#7360f2}
   .btn-share-icon{display:flex;align-items:center;justify-content:center;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:16px;color:var(--gray-500);background:#fff;cursor:pointer;transition:border-color .15s,color .15s;flex-shrink:0}
   .btn-share-icon:hover{border-color:var(--blue);color:var(--blue)}
+  /* NP dropdown */
+  .np-city-item{padding:10px 14px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--gray-100)}
+  .np-city-item:hover{background:var(--gray-50);color:var(--blue)}
+  .np-city-item:last-child{border-bottom:none}
   /* Out of stock notify */
   .notify-stock{margin-top:12px;padding:14px;background:var(--gray-50);border:1.5px dashed var(--gray-300);border-radius:10px;font-size:14px}
   .notify-stock p{margin:0 0 8px;color:var(--gray-600)}
@@ -1631,14 +1635,30 @@ function renderCart() {
         <div class="form-field"><label>Телефон *</label><input type="tel" id="oPhone" value="+380" required></div>
       </div>
       <div class="form-row">
-        <div class="form-field"><label>Місто</label><input type="text" id="oCity" placeholder="Київ"></div>
         <div class="form-field">
           <label>Доставка</label>
-          <select id="oDelivery">
+          <select id="oDelivery" onchange="onDeliveryChange()">
             <option value="nova_poshta">Нова Пошта</option>
             <option value="pickup">Самовивіз</option>
           </select>
         </div>
+        <div class="form-field" id="npCityWrap">
+          <label>Місто</label>
+          <div style="position:relative">
+            <input type="text" id="oCity" placeholder="Введіть місто..." autocomplete="off" oninput="npSearchCity(this.value)">
+            <div id="npCityDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--gray-200);border-top:none;border-radius:0 0 8px 8px;z-index:50;max-height:220px;overflow-y:auto;box-shadow:var(--shadow)"></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-field" id="npWarehouseWrap" style="display:none">
+        <label>Відділення Нової Пошти</label>
+        <select id="oWarehouse">
+          <option value="">— спочатку оберіть місто —</option>
+        </select>
+      </div>
+      <div class="form-field" id="pickupAddressWrap" style="display:none">
+        <label>Адреса самовивозу</label>
+        <input type="text" value="Комарно, вул. Річкова 1, Львівська обл." readonly style="background:var(--gray-50);color:var(--gray-700)">
       </div>
       <div class="form-field"><label>Коментар</label><textarea id="oComment" rows="3" placeholder=""></textarea></div>
       <button class="btn-checkout" onclick="submitOrder()"><i class="fas fa-check"></i> Підтвердити замовлення</button>
@@ -1676,12 +1696,18 @@ async function submitOrder() {
   const phone = document.getElementById('oPhone').value.trim();
   if(!name||!phone){ showToast('Вкажіть ім\'я та телефон','error'); return; }
 
+  const delivery = document.getElementById('oDelivery').value;
+  const warehouseEl = document.getElementById('oWarehouse');
+  const warehouseLabel = warehouseEl ? warehouseEl.options[warehouseEl.selectedIndex]?.text : '';
   const subtotal = cart.reduce((s,c)=>s+c.price*c.qty,0);
   const body = {
     customerName: name,
     customerPhone: phone,
-    city: document.getElementById('oCity').value,
-    delivery: document.getElementById('oDelivery').value,
+    city: _npSelectedCityLabel || document.getElementById('oCity').value,
+    cityRef: _npSelectedCityRef || '',
+    warehouse: warehouseLabel || '',
+    warehouseRef: warehouseEl?.value || '',
+    delivery,
     comment: document.getElementById('oComment').value,
     items: cart,
     subtotal,
@@ -1802,6 +1828,77 @@ function closeModal(e) {
 function closeModalDirect() {
   document.getElementById('modalOverlay').style.display = 'none';
 }
+
+// ============ NOVA POSHTA ============
+let _npCityTimer = null;
+let _npSelectedCityRef = '';
+let _npSelectedCityLabel = '';
+
+function onDeliveryChange() {
+  const val = document.getElementById('oDelivery').value;
+  const npWrap = document.getElementById('npCityWrap');
+  const whWrap = document.getElementById('npWarehouseWrap');
+  const pickupWrap = document.getElementById('pickupAddressWrap');
+  if(val === 'nova_poshta') {
+    npWrap.style.display = '';
+    pickupWrap.style.display = 'none';
+    if(_npSelectedCityRef) whWrap.style.display = '';
+  } else {
+    npWrap.style.display = 'none';
+    whWrap.style.display = 'none';
+    pickupWrap.style.display = '';
+  }
+}
+
+function npSearchCity(q) {
+  _npSelectedCityRef = '';
+  document.getElementById('npWarehouseWrap').style.display = 'none';
+  clearTimeout(_npCityTimer);
+  if(q.length < 2) { document.getElementById('npCityDropdown').style.display = 'none'; return; }
+  _npCityTimer = setTimeout(async () => {
+    try {
+      const data = await api('/api/np/cities?q=' + encodeURIComponent(q));
+      const dd = document.getElementById('npCityDropdown');
+      if(!data.length) { dd.style.display = 'none'; return; }
+      dd.innerHTML = data.map(c => `<div class="np-city-item" data-ref="${c.ref}" data-label="${c.label}" onclick="npSelectCity(this)">${c.label}</div>`).join('');
+      dd.style.display = 'block';
+    } catch(e) {}
+  }, 350);
+}
+
+function npSelectCity(el) {
+  _npSelectedCityRef = el.dataset.ref;
+  _npSelectedCityLabel = el.dataset.label;
+  document.getElementById('oCity').value = el.dataset.label;
+  document.getElementById('npCityDropdown').style.display = 'none';
+  npLoadWarehouses(_npSelectedCityRef);
+}
+
+async function npLoadWarehouses(cityRef) {
+  const sel = document.getElementById('oWarehouse');
+  const wrap = document.getElementById('npWarehouseWrap');
+  sel.innerHTML = '<option>Завантаження...</option>';
+  wrap.style.display = '';
+  try {
+    const data = await api('/api/np/warehouses?cityRef=' + encodeURIComponent(cityRef));
+    if(!data.length) {
+      sel.innerHTML = '<option value="">Відділень не знайдено</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— оберіть відділення —</option>' +
+      data.map(w => `<option value="${w.ref}">${w.label}</option>`).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">Помилка завантаження</option>';
+  }
+}
+
+// Close city dropdown on outside click
+document.addEventListener('click', e => {
+  if(!e.target.closest('#npCityWrap')) {
+    const dd = document.getElementById('npCityDropdown');
+    if(dd) dd.style.display = 'none';
+  }
+});
 
 // ============ MOBILE UX ============
 function toggleFilters() {

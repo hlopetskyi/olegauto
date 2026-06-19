@@ -470,10 +470,13 @@ app.post('/api/orders', async (req, res) => {
   res.json(order);
 
   const items = (order.items||[]).map(i=>`  • ${i.name} × ${i.qty} — €${i.price}`).join('\n');
+  const deliveryLine = order.delivery === 'nova_poshta'
+    ? `🚚 Нова Пошта: ${order.city||'—'}${order.warehouse ? ', ' + order.warehouse : ''}`
+    : `🏠 Самовивіз: Комарно, вул. Річкова 1`;
   const msg = `🛒 <b>Нове замовлення #${order.id}</b>\n\n`
     + `👤 ${order.customerName}\n`
     + `📞 ${order.customerPhone}\n`
-    + `🏙 ${order.city||'—'} / ${order.delivery==='nova_poshta'?'Нова Пошта':'Самовивіз'}\n`
+    + `${deliveryLine}\n`
     + (order.comment ? `💬 ${order.comment}\n` : '')
     + `\n<b>Товари:</b>\n${items}\n\n`
     + `💰 <b>Сума: €${order.total}</b>`;
@@ -618,6 +621,52 @@ app.get('/sitemap.xml', (req, res) => {
 ${staticUrls.join('\n')}
 ${productUrls.join('\n')}
 </urlset>`);
+});
+
+// ============ NOVA POSHTA PROXY ============
+const NP_API_KEY = process.env.NP_API_KEY || '';
+const NP_URL = 'https://api.novaposhta.ua/v2.0/json/';
+
+async function npRequest(modelName, calledMethod, methodProperties) {
+  const r = await fetch(NP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey: NP_API_KEY, modelName, calledMethod, methodProperties })
+  });
+  return r.json();
+}
+
+app.get('/api/np/cities', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q || q.length < 2) return res.json([]);
+  try {
+    const data = await npRequest('Address', 'searchSettlements', {
+      CityName: q, Limit: '10', Page: '1'
+    });
+    const addresses = (data.data?.[0]?.Addresses || []);
+    res.json(addresses.map(a => ({
+      ref: a.DeliveryCity,
+      label: `${a.Present}`,
+      city: a.MainDescription,
+      area: a.Area,
+      region: a.Region
+    })));
+  } catch(e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/np/warehouses', async (req, res) => {
+  const cityRef = (req.query.cityRef || '').trim();
+  if (!cityRef) return res.json([]);
+  try {
+    const data = await npRequest('AddressGeneral', 'getWarehouses', {
+      CityRef: cityRef, Limit: 200, Page: 1
+    });
+    res.json((data.data || []).map(w => ({
+      ref: w.Ref,
+      label: w.ShortAddress || w.Description,
+      number: w.Number
+    })));
+  } catch(e) { res.status(502).json({ error: e.message }); }
 });
 
 // ============ CONTACT ============
