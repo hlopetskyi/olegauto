@@ -820,7 +820,7 @@ function renderProductsTable() {
       <td class="inline-edit-cell" onclick="inlineEdit(event,${p.id},'price',${p.price})" title="Клацни для редагування" style="font-weight:700;color:var(--orange)">${p.price.toLocaleString('de-DE')} €</td>
       <td class="inline-edit-cell" onclick="inlineEdit(event,${p.id},'stock',${p.stock})" title="Клацни для редагування"><span class="${stockCls}">${stockTxt}</span></td>
       <td style="white-space:nowrap">
-        <a class="act-btn" href="${location.origin}/product/${p.id}" target="_blank" title="Переглянути на сайті" style="text-decoration:none"><i class="fas fa-eye"></i></a>
+        <button class="act-btn" onclick="openProductPreview(${p.id})" title="Переглянути на сайті"><i class="fas fa-eye"></i></button>
         <button class="act-btn edit" onclick="editProduct(${p.id})" title="Редагувати"><i class="fas fa-pen"></i></button>
         <button class="act-btn" onclick="duplicateProduct(${p.id})" title="Дублювати" style="border-color:var(--gray-200);color:var(--gray-500)"><i class="fas fa-copy"></i></button>
         <button class="act-btn del" onclick="deleteProduct(${p.id},'${p.name.replace(/'/g,"\\'")}')  " title="Видалити"><i class="fas fa-trash"></i></button>
@@ -2020,6 +2020,37 @@ function showToast(msg, type='') {
   document.getElementById('toastContainer').appendChild(el);
   setTimeout(()=>el.remove(), 2800);
 }
+</script>
+<!-- Product Preview Modal -->
+<div id="productPreviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;overflow:hidden;width:680px;max-width:95vw;height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1.5px solid var(--gray-200);flex-shrink:0">
+      <span style="font-weight:700;font-size:14px;color:var(--gray-700)">Перегляд товару</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <a id="productPreviewLink" href="#" target="_blank" style="font-size:12px;color:var(--blue);text-decoration:none;font-weight:600"><i class="fas fa-external-link-alt"></i> Відкрити</a>
+        <button onclick="closeProductPreview()" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--gray-500);line-height:1;padding:0 4px">&times;</button>
+      </div>
+    </div>
+    <iframe id="productPreviewFrame" src="" style="flex:1;border:none;width:100%"></iframe>
+  </div>
+</div>
+
+<script>
+function openProductPreview(id) {
+  const url = location.origin + '/product/' + id;
+  document.getElementById('productPreviewFrame').src = url;
+  document.getElementById('productPreviewLink').href = url;
+  const modal = document.getElementById('productPreviewModal');
+  modal.style.display = 'flex';
+  modal.onclick = e => { if(e.target===modal) closeProductPreview(); };
+}
+function closeProductPreview() {
+  document.getElementById('productPreviewModal').style.display = 'none';
+  document.getElementById('productPreviewFrame').src = '';
+}
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape' && document.getElementById('productPreviewModal').style.display!=='none') closeProductPreview();
+});
 </script>
 </body>
 </html>
