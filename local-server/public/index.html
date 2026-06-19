@@ -278,6 +278,9 @@
   /* SHOW MORE */
   .show-more{text-align:center;margin-top:36px}
 
+  /* Product name clamp */
+  .product-name{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
   /* RESPONSIVE */
   @media(max-width:1024px){
     .product-grid{grid-template-columns:repeat(2,1fr)}
@@ -290,7 +293,7 @@
     .features-grid{grid-template-columns:repeat(2,1fr)}
   }
   @media(max-width:640px){
-    .product-grid{grid-template-columns:1fr}
+    .product-grid,.product-grid[style]{grid-template-columns:1fr!important}
     .header-inner{flex-wrap:wrap;height:auto;padding:12px 16px;gap:10px}
     .header-search{order:3;flex:1 1 100%}
     nav{display:none}
@@ -298,7 +301,46 @@
     .hero h1{font-size:26px}
     .form-row{grid-template-columns:1fr}
     .header-phone{display:none}
+    .currency-widget{display:none}
+    body{padding-bottom:68px}
+    .toast-container{bottom:76px;right:12px}
+    .fab-wrap{bottom:76px!important;right:12px!important;transition:transform .25s ease}
   }
+
+  /* BOTTOM NAV */
+  .bottom-nav{display:none}
+  @media(max-width:640px){
+    .bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0;height:60px;background:#fff;border-top:1.5px solid var(--gray-200);z-index:300;box-shadow:0 -2px 12px rgba(0,0,0,.1)}
+    .bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10px;font-weight:600;color:var(--gray-500);background:none;border:none;padding:6px 0;cursor:pointer;position:relative;transition:color .2s}
+    .bottom-nav button.active{color:var(--blue)}
+    .bottom-nav button i{font-size:20px}
+    .bnav-badge{position:absolute;top:4px;left:50%;margin-left:4px;background:var(--orange);color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;min-width:16px}
+  }
+
+  /* FILTER COLLAPSE on mobile */
+  .filters-toggle-btn{display:none}
+  @media(max-width:640px){
+    .filters-toggle-btn{display:flex;width:100%;padding:13px 16px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--radius);font-size:14px;font-weight:600;color:var(--gray-700);align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:0}
+    .filters-toggle-btn i.fa-chevron-down{transition:transform .25s}
+    .filters-toggle-btn.open i.fa-chevron-down{transform:rotate(180deg)}
+    .catalog-filters{padding:0;background:none;border:none}
+    .filters-body{display:none;background:var(--gray-50);border:1.5px solid var(--gray-200);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:16px;margin-bottom:12px}
+    .filters-body.open{display:block}
+  }
+
+  /* STICKY CART BAR on product detail */
+  .detail-sticky-bar{display:none}
+  @media(max-width:640px){
+    .detail-sticky-bar{display:flex;position:fixed;bottom:60px;left:0;right:0;background:#fff;border-top:1.5px solid var(--gray-200);padding:10px 16px;gap:12px;align-items:center;z-index:200;box-shadow:0 -4px 12px rgba(0,0,0,.1)}
+    .detail-sticky-price{font-size:22px;font-weight:800;color:var(--orange);white-space:nowrap}
+    .detail-sticky-btn{flex:1;padding:12px;background:var(--orange);color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer}
+    .detail-sticky-btn:disabled{opacity:.5;cursor:not-allowed;background:var(--gray-300)}
+  }
+
+  /* SCROLL TO TOP */
+  .scroll-top-btn{position:fixed;bottom:80px;right:16px;width:42px;height:42px;background:var(--blue);color:#fff;border:none;border-radius:50%;font-size:16px;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.25);z-index:250;transition:opacity .2s}
+  .scroll-top-btn.visible{display:flex}
+  @media(max-width:640px){.scroll-top-btn{bottom:70px;right:14px}}
   /* Header phone */
   .header-phone{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px;color:var(--blue);text-decoration:none;white-space:nowrap}
   .header-phone:hover{color:var(--orange)}
@@ -374,6 +416,28 @@
     </button>
   </div>
 </header>
+
+<!-- BOTTOM NAVIGATION (mobile only) -->
+<nav class="bottom-nav" id="bottomNav">
+  <button onclick="showPage('home')" data-page="home" id="bnav-home" class="active">
+    <i class="fas fa-home"></i>Головна
+  </button>
+  <button onclick="showPage('catalog')" data-page="catalog" id="bnav-catalog">
+    <i class="fas fa-th-large"></i>Каталог
+  </button>
+  <button onclick="showPage('cart')" data-page="cart" id="bnav-cart">
+    <i class="fas fa-shopping-cart"></i>Кошик
+    <span class="bnav-badge" id="bnavBadge" style="display:none">0</span>
+  </button>
+  <button onclick="showPage('contacts')" data-page="contacts" id="bnav-contacts">
+    <i class="fas fa-phone"></i>Контакти
+  </button>
+</nav>
+
+<!-- SCROLL TO TOP -->
+<button class="scroll-top-btn" id="scrollTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+  <i class="fas fa-chevron-up"></i>
+</button>
 
 <!-- FLOATING CONTACT BUTTON -->
 <div class="fab-wrap">
@@ -543,6 +607,11 @@
 
       <!-- FILTERS -->
       <div class="catalog-filters">
+        <button class="filters-toggle-btn" id="filtersToggleBtn" onclick="toggleFilters()">
+          <span><i class="fas fa-sliders-h" style="margin-right:8px"></i>Фільтри</span>
+          <i class="fas fa-chevron-down"></i>
+        </button>
+        <div class="filters-body" id="filtersBody">
         <div class="filters-row">
           <select class="filter-select" id="filterBrand" onchange="onFilterBrandChange()">
             <option value="">Всі марки авто</option>
@@ -610,6 +679,7 @@
           <button onclick="resetAllFilters()" style="background:none;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 14px;font-size:13px;color:var(--gray-500);cursor:pointer;margin-left:auto" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--gray-200)';this.style.color='var(--gray-500)'"><i class="fas fa-times"></i> Скинути фільтри</button>
         </div>
         <div class="active-filters" id="activeFilters"></div>
+        </div><!-- /filters-body -->
       </div>
 
       <div class="results-info" id="resultsInfo"></div>
@@ -622,6 +692,13 @@
 
 <!-- =================== PRODUCT DETAIL PAGE =================== -->
 <div class="page" id="page-product">
+  <!-- Sticky add-to-cart bar (mobile only) -->
+  <div class="detail-sticky-bar" id="detailStickyBar" style="display:none">
+    <span class="detail-sticky-price" id="detailStickyPrice"></span>
+    <button class="detail-sticky-btn" id="detailStickyBtn" onclick="addToCartFromDetail(window._detailProductId)">
+      <i class="fas fa-shopping-cart"></i> В кошик
+    </button>
+  </div>
   <div class="product-detail">
     <div class="breadcrumb" id="productBreadcrumb"></div>
     <button class="back-btn" onclick="showPage(prevPage||'catalog')"><i class="fas fa-arrow-left"></i> Назад</button>
@@ -963,6 +1040,14 @@ function showPage(name, opts={}, noPush=false) {
     b.classList.remove('active');
     if(b.id==='nav-'+name) b.classList.add('active');
   });
+  // bottom nav active state
+  document.querySelectorAll('.bottom-nav button').forEach(b=>{
+    b.classList.remove('active');
+    if(b.dataset.page===name) b.classList.add('active');
+  });
+  // hide sticky product bar when leaving product page
+  const stickyBar = document.getElementById('detailStickyBar');
+  if(stickyBar) stickyBar.style.display = (name==='product') ? '' : 'none';
   prevPage = currentPage;
   currentPage = name;
   if (!noPush) {
@@ -1383,6 +1468,18 @@ async function loadProductDetail(id) {
       }
     });
 
+    // Populate sticky mobile bar
+    window._detailProductId = p.id;
+    const stickyBar = document.getElementById('detailStickyBar');
+    const stickyPrice = document.getElementById('detailStickyPrice');
+    const stickyBtn = document.getElementById('detailStickyBtn');
+    if(stickyBar && stickyPrice && stickyBtn) {
+      stickyPrice.textContent = `€${p.price.toLocaleString('de-DE')}`;
+      if(p.stock <= 0) { stickyBtn.disabled = true; stickyBtn.innerHTML = '<i class="fas fa-times"></i> Немає'; }
+      else { stickyBtn.disabled = false; stickyBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> В кошик'; }
+      stickyBar.style.display = '';
+    }
+
     el.innerHTML = `
 <div class="detail-grid">
   <div class="detail-img">${imgHtml}</div>
@@ -1486,6 +1583,11 @@ function saveCart() {
 function updateCartBadge() {
   const total = cart.reduce((s,c)=>s+c.qty,0);
   document.getElementById('cartBadge').textContent = total;
+  const bnavBadge = document.getElementById('bnavBadge');
+  if(bnavBadge) {
+    bnavBadge.textContent = total;
+    bnavBadge.style.display = total > 0 ? 'flex' : 'none';
+  }
 }
 
 function renderCart() {
@@ -1700,6 +1802,31 @@ function closeModal(e) {
 function closeModalDirect() {
   document.getElementById('modalOverlay').style.display = 'none';
 }
+
+// ============ MOBILE UX ============
+function toggleFilters() {
+  const btn = document.getElementById('filtersToggleBtn');
+  const body = document.getElementById('filtersBody');
+  if(!btn || !body) return;
+  btn.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+// FAB hide on scroll down, scroll-to-top button
+let _lastScrollY = 0;
+window.addEventListener('scroll', () => {
+  const y = window.scrollY;
+  const fab = document.querySelector('.fab-wrap');
+  if(fab) {
+    fab.style.transform = (y > _lastScrollY && y > 150) ? 'translateY(200px)' : '';
+  }
+  const topBtn = document.getElementById('scrollTopBtn');
+  if(topBtn) topBtn.classList.toggle('visible', y > 350);
+  _lastScrollY = y;
+}, {passive: true});
+
+// Sticky cart bar for product detail — populated in loadProductDetail
+window._detailProductId = null;
 </script>
 </body>
 </html>
