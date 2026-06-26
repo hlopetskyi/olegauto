@@ -223,7 +223,20 @@
   .form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .form-field{margin-bottom:16px}
   .form-field label{display:block;font-size:13px;font-weight:600;color:var(--gray-500);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
-  .form-field input,.form-field select,.form-field textarea{width:100%;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border .2s}
+  .form-field input,.form-field select,.form-field textarea{width:100%;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:16px;font-family:'Inter',sans-serif;outline:none;transition:border .2s}
+  @media(max-width:640px){
+    .header-search input{font-size:16px}
+    .filter-select{font-size:16px}
+    .finder-field select,.finder-field input{font-size:16px}
+    .sbar-extra{display:none}
+    #scheduleBar{justify-content:flex-start;padding:6px 12px;gap:10px}
+    .product-card{display:grid;grid-template-columns:110px 1fr;border-radius:10px}
+    .product-img{height:110px;width:110px;border-radius:10px 0 0 10px;flex-shrink:0}
+    .product-body{padding:10px 12px;height:auto!important;display:flex;flex-direction:column}
+    .product-name{font-size:13px;-webkit-line-clamp:3}
+    .product-price{font-size:17px}
+    .btn-cart{padding:7px 10px;font-size:11px}
+  }
   .form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:var(--blue)}
   .form-field textarea{resize:vertical;min-height:80px}
 
@@ -302,6 +315,7 @@
     .form-row{grid-template-columns:1fr}
     .header-phone{display:none}
     .currency-widget{display:none}
+    .cart-btn{display:none}
     body{padding-bottom:68px}
     .toast-container{bottom:76px;right:12px}
     .fab-wrap{bottom:76px!important;right:12px!important;transition:transform .25s ease}
@@ -422,13 +436,13 @@
 </header>
 
 <!-- SCHEDULE BAR -->
-<div id="scheduleBar" style="background:var(--blue);color:#fff;font-size:13px;padding:7px 20px;display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap">
-  <span id="scheduleTodayBadge" style="display:none;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 12px;font-weight:700"></span>
-  <span id="scheduleTodayHours" style="opacity:.9"></span>
-  <span style="opacity:.5">|</span>
-  <span style="opacity:.85"><i class="fas fa-map-marker-alt" style="margin-right:5px"></i>Комарно, Львівська обл.</span>
-  <span style="opacity:.5">|</span>
-  <a onclick="showPage('contacts')" style="color:#fff;text-decoration:none;opacity:.85;cursor:pointer"><i class="fas fa-clock" style="margin-right:5px"></i>Повний графік</a>
+<div id="scheduleBar" style="background:var(--blue);color:#fff;font-size:13px;padding:6px 20px;display:flex;align-items:center;justify-content:center;gap:16px;white-space:nowrap;overflow:hidden">
+  <span id="scheduleTodayBadge" style="display:none;background:rgba(255,255,255,.18);border-radius:20px;padding:2px 10px;font-weight:700;flex-shrink:0"></span>
+  <span id="scheduleTodayHours" style="opacity:.9;overflow:hidden;text-overflow:ellipsis"></span>
+  <span class="sbar-extra" style="opacity:.5;flex-shrink:0">|</span>
+  <span class="sbar-extra" style="opacity:.85;flex-shrink:0"><i class="fas fa-map-marker-alt" style="margin-right:4px"></i>Комарно</span>
+  <span class="sbar-extra" style="opacity:.5;flex-shrink:0">|</span>
+  <a onclick="showPage('contacts')" class="sbar-extra" style="color:#fff;text-decoration:none;opacity:.85;cursor:pointer;flex-shrink:0"><i class="fas fa-clock" style="margin-right:4px"></i>Графік</a>
 </div>
 
 <!-- BOTTOM NAVIGATION (mobile only) -->
@@ -622,10 +636,13 @@
 
       <!-- FILTERS -->
       <div class="catalog-filters">
-        <button class="filters-toggle-btn" id="filtersToggleBtn" onclick="toggleFilters()">
-          <span><i class="fas fa-sliders-h" style="margin-right:8px"></i>Фільтри</span>
-          <i class="fas fa-chevron-down"></i>
-        </button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="filters-toggle-btn" id="filtersToggleBtn" onclick="toggleFilters()" style="flex:1;margin-bottom:0">
+            <span><i class="fas fa-sliders-h" style="margin-right:8px"></i>Фільтри</span>
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <button id="mobileResetBtn" onclick="resetAllFilters()" style="display:none;flex-shrink:0;padding:13px 14px;background:none;border:1.5px solid var(--gray-200);border-radius:var(--radius);font-size:13px;color:var(--gray-500);cursor:pointer"><i class="fas fa-times"></i></button>
+        </div>
         <div class="filters-body" id="filtersBody">
         <div class="filters-row">
           <select class="filter-select" id="filterBrand" onchange="onFilterBrandChange()">
@@ -1315,6 +1332,14 @@ function toggleStock() {
 }
 
 function applyFilters() {
+  const hasFilter = document.getElementById('filterBrand').value ||
+    document.getElementById('filterCategory').value ||
+    document.getElementById('filterYearFrom').value ||
+    document.getElementById('filterPriceMin').value ||
+    document.getElementById('headerSearch').value ||
+    catalogCondition || catalogInStock;
+  const btn = document.getElementById('mobileResetBtn');
+  if (btn) btn.style.display = hasFilter ? 'block' : 'none';
   loadCatalogProducts();
 }
 
@@ -1441,6 +1466,8 @@ function resetAllFilters() {
   catalogCarBrand=''; catalogCarModel=''; catalogCarEngine=''; catalogCondition=''; catalogInStock=false;
   setCondFilterVal('');
   document.getElementById('stockToggle').classList.remove('on');
+  const btn = document.getElementById('mobileResetBtn');
+  if (btn) btn.style.display = 'none';
   loadCatalogProducts();
 }
 
