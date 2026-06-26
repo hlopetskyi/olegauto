@@ -1,0 +1,13 @@
+{
+  "name": "OlegAvto — Запчастини",
+  "short_name": "OlegAvto",
+  "description": "Автозапчастини для Renault, Peugeot, Citroën, Fiat",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1565c0",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

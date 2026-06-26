@@ -626,6 +626,26 @@ ${productUrls.join('\n')}
 </urlset>`);
 });
 
+// ============ RESTOCK SUBSCRIPTIONS ============
+const NOTIFY_FILE = path.join(__dirname, 'data', 'notify.json');
+function loadNotify() { try { return JSON.parse(fs.readFileSync(NOTIFY_FILE, 'utf8')); } catch { return []; } }
+
+app.post('/api/notify-restock', (req, res) => {
+  const { productId, phone } = req.body || {};
+  if(!productId || !phone) return res.status(400).json({ error: 'Missing fields' });
+  const list = loadNotify();
+  const already = list.find(x => x.productId === productId && x.phone === phone);
+  if(!already) {
+    list.push({ productId, phone, createdAt: new Date().toISOString() });
+    fs.writeFileSync(NOTIFY_FILE, JSON.stringify(list, null, 2));
+  }
+  res.json({ ok: true });
+});
+
+app.get('/api/notify-restock', dynamicAdminAuth, (req, res) => {
+  res.json(loadNotify());
+});
+
 // ============ SETTINGS ============
 const SETTINGS_FILE = path.join(__dirname, 'data', 'settings.json');
 function loadSettings() {

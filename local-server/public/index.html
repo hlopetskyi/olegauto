@@ -13,6 +13,10 @@
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1565c0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>OlegAvto — Запчастини для французьких авто</title>
 <meta name="description" content="Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою по всій Україні.">
 <meta name="keywords" content="запчастини Renault, запчастини Peugeot, запчастини Citroen, запчастини Fiat, автозапчастини Україна, б/у запчастини французькі авто">
@@ -401,6 +405,34 @@
   .np-city-item{padding:10px 14px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--gray-100)}
   .np-city-item:hover{background:var(--gray-50);color:var(--blue)}
   .np-city-item:last-child{border-bottom:none}
+  /* Wishlist heart */
+  .wish-btn{position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.92);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--gray-400);z-index:5;transition:all .2s;box-shadow:0 1px 4px rgba(0,0,0,.15);flex-shrink:0}
+  .wish-btn.active{color:#e53935}
+  .wish-btn:hover{transform:scale(1.12)}
+  /* Compare button */
+  .compare-btn{display:flex;align-items:center;gap:4px;padding:5px 9px;border:1.5px solid var(--gray-200);background:#fff;border-radius:6px;font-size:11px;color:var(--gray-500);cursor:pointer;transition:all .15s;white-space:nowrap}
+  .compare-btn.active{border-color:var(--blue);color:var(--blue);background:#e3f0ff}
+  .compare-btn:hover{border-color:var(--blue);color:var(--blue)}
+  /* Comparison floating bar */
+  .compare-bar{display:none;position:fixed;bottom:68px;left:0;right:0;background:var(--blue);color:#fff;z-index:400;padding:10px 14px;flex-direction:row;align-items:center;gap:8px;box-shadow:0 -4px 16px rgba(0,0,0,.2)}
+  .compare-bar.show{display:flex}
+  .compare-bar-items{display:flex;gap:6px;flex:1;overflow-x:auto}
+  .compare-chip{background:rgba(255,255,255,.2);border-radius:20px;padding:4px 10px;font-size:12px;white-space:nowrap;cursor:pointer;transition:background .15s}
+  .compare-chip:hover{background:rgba(255,255,255,.35)}
+  /* Comparison modal */
+  .compare-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;overflow-y:auto;padding:20px 0;-webkit-overflow-scrolling:touch}
+  .compare-modal.open{display:block}
+  .compare-table{background:#fff;border-radius:16px;margin:0 12px 40px;overflow:hidden}
+  /* Recently viewed */
+  .recent-scroll{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+  .recent-scroll::-webkit-scrollbar{display:none}
+  .recent-card{flex-shrink:0;width:130px;cursor:pointer;border:1.5px solid var(--gray-200);border-radius:10px;overflow:hidden;background:#fff;transition:border-color .15s;scroll-snap-align:start}
+  .recent-card:hover{border-color:var(--blue)}
+  .recent-card-img{height:90px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:30px;overflow:hidden}
+  .recent-card-img img{width:100%;height:100%;object-fit:cover}
+  .recent-card-body{padding:8px}
+  .recent-card-name{font-size:12px;font-weight:600;color:var(--gray-800);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:4px}
+  .recent-card-price{font-size:13px;font-weight:700;color:var(--orange)}
   /* Out of stock notify */
   .notify-stock{margin-top:12px;padding:14px;background:var(--gray-50);border:1.5px dashed var(--gray-300);border-radius:10px;font-size:14px}
   .notify-stock p{margin:0 0 8px;color:var(--gray-600)}
@@ -457,6 +489,10 @@
     <i class="fas fa-shopping-cart"></i>Кошик
     <span class="bnav-badge" id="bnavBadge" style="display:none">0</span>
   </button>
+  <button onclick="showPage('wishlist')" data-page="wishlist" id="bnav-wishlist">
+    <i class="far fa-heart"></i>Вибране
+    <span class="bnav-badge" id="wishlistBadge" style="display:none">0</span>
+  </button>
   <button onclick="showPage('contacts')" data-page="contacts" id="bnav-contacts">
     <i class="fas fa-phone"></i>Контакти
   </button>
@@ -487,6 +523,26 @@
 </div>
 
 <!-- =================== HOME PAGE =================== -->
+<!-- WISHLIST PAGE -->
+<div class="page" id="page-wishlist">
+  <div class="page-inner" style="padding:20px 16px">
+    <h2 style="font-size:22px;font-weight:800;margin-bottom:20px"><i class="fas fa-heart" style="color:#e53935;margin-right:8px"></i>Вибране</h2>
+    <div id="wishlistContent"></div>
+  </div>
+</div>
+
+<!-- COMPARISON BAR (fixed) -->
+<div class="compare-bar" id="compareBar">
+  <div class="compare-bar-items" id="compareBarItems"></div>
+  <button onclick="openComparison()" style="background:#fff;color:var(--blue);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">Порівняти</button>
+  <button onclick="clearCompare()" style="background:rgba(255,255,255,.2);border:none;border-radius:8px;padding:8px 10px;cursor:pointer;color:#fff;flex-shrink:0"><i class="fas fa-times"></i></button>
+</div>
+
+<!-- COMPARISON MODAL -->
+<div class="compare-modal" id="compareModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="compare-table" id="compareTable"></div>
+</div>
+
 <div class="page active" id="page-home">
   <!-- HERO -->
   <div class="hero">
@@ -545,6 +601,19 @@
           <button class="btn-find" onclick="findParts()"><i class="fas fa-search"></i> Знайти запчастини</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- RECENTLY VIEWED -->
+  <div class="section" id="recentSection" style="display:none">
+    <div class="section-inner">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <h2 class="section-title" style="margin-bottom:2px">Нещодавно переглянуті</h2>
+        </div>
+        <button onclick="clearRecentlyViewed()" style="background:none;border:none;color:var(--gray-400);font-size:12px;cursor:pointer;padding:4px 0">Очистити</button>
+      </div>
+      <div class="recent-scroll" id="recentScroll"></div>
     </div>
   </div>
 
@@ -1075,7 +1144,8 @@ function showPage(name, opts={}, noPush=false) {
   }
   window.scrollTo(0,0);
 
-  if(name==='home') { updateMeta({ url: SITE+'/' }); loadHomeProducts(); }
+  if(name==='home') { updateMeta({ url: SITE+'/' }); loadHomeProducts(); loadRecentlyViewed(); }
+  if(name==='wishlist') { updateMeta({ title:'Вибране — OlegAvto', url: SITE+'/wishlist' }); loadWishlistPage(); }
   if(name==='contacts') { loadSchedule('scheduleTable'); updateMeta({ title:'Контакти — OlegAvto', desc:'Зв\'яжіться з нами для консультації по запчастинам для Renault, Peugeot, Citroën, Fiat.', url: SITE+'/contacts' }); }
   if(name==='catalog') {
     if(opts.brand){ document.getElementById('filterBrand').value=opts.brand; }
@@ -1481,8 +1551,12 @@ function renderProductCard(p) {
     : p.stock>0
       ? `<span class="stock-low"><i class="fas fa-exclamation-circle"></i> Залишок: ${p.stock} шт</span>`
       : `<span class="stock-out"><i class="fas fa-times-circle"></i> Немає</span>`;
+  const wished = isWishlisted(p.id);
   return `
-<div class="product-card" onclick="openProduct(${p.id})">
+<div class="product-card" onclick="openProduct(${p.id})" style="position:relative">
+  <button class="wish-btn ${wished?'active':''}" data-id="${p.id}" onclick="toggleWishlist(${p.id},event)" title="${wished?'Видалити з вибраного':'В обране'}">
+    <i class="${wished?'fas':'far'} fa-heart"></i>
+  </button>
   <div class="product-img">${imgHtml}</div>
   <div class="product-body" style="display:flex;flex-direction:column;height:calc(100% - 180px)">
     <div class="product-badges">
@@ -1496,9 +1570,12 @@ function renderProductCard(p) {
       ${stockHtml}
       <div class="product-footer" style="margin-top:8px">
         <div class="product-price">€${p.price.toLocaleString('de-DE')} </div>
-        <button class="btn-cart" onclick="event.stopPropagation();addToCart(${p.id})">
-          <i class="fas fa-cart-plus"></i> В кошик
-        </button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="compare-btn ${compareList.some(x=>x.id===p.id)?'active':''}" data-id="${p.id}" onclick="event.stopPropagation();toggleCompare(${p.id},${JSON.stringify(p.name)},event)" title="Порівняти"><i class="fas fa-balance-scale"></i></button>
+          <button class="btn-cart" onclick="event.stopPropagation();addToCart(${p.id})">
+            <i class="fas fa-cart-plus"></i> В кошик
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1527,6 +1604,7 @@ async function loadProductDetail(id) {
       const brand = (p.compatibility&&p.compatibility[0]?.brand)||p.brand||'';
       bc.innerHTML = `<a onclick="showPage('home')">Головна</a><span class="bc-sep">›</span><a onclick="showPage('catalog')">Каталог</a>${brand?`<span class="bc-sep">›</span><a onclick="showPage('catalog');setTimeout(()=>{document.getElementById('filterBrand').value='${brand}';onFilterBrandChange();},100)">${brand}</a>`:''}<span class="bc-sep">›</span><span>${p.name}</span>`;
     }
+    addToRecentlyViewed(p);
     const imgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
     const imgHtml = imgs.length
       ? `<div>
@@ -1602,7 +1680,14 @@ async function loadProductDetail(id) {
       <button class="btn-primary detail-cart-btn" id="addToCartBtn" onclick="addToCartFromDetail(${p.id})" ${p.stock<=0?'disabled style="opacity:.5;cursor:not-allowed"':''}>
         <i class="fas fa-shopping-cart"></i> Додати в кошик
       </button>
-      ${p.stock<=0?`<div class="notify-stock"><p>Товар тимчасово відсутній. Напишіть нам — повідомимо як з'явиться:</p><a href="viber://chat?number=%2B380677448965"><i class="fab fa-viber"></i> Написати у Viber</a></div>`:''}
+      ${p.stock<=0?`<div class="notify-stock" id="restockWrap_${p.id}">
+        <p>Товар тимчасово відсутній. Залиште телефон — повідомимо як з'явиться:</p>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="tel" id="restockPhone_${p.id}" placeholder="+380..." style="flex:1;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:16px">
+          <button onclick="subscribeRestock(${p.id})" style="background:var(--blue);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:15px;font-weight:700;cursor:pointer;flex-shrink:0"><i class="fas fa-bell"></i></button>
+        </div>
+        <a href="viber://chat?number=%2B380677448965" style="display:block;margin-top:10px;font-size:13px;color:var(--blue)"><i class="fab fa-viber"></i> Або напишіть у Viber</a>
+      </div>`:''}
       <div class="detail-secondary-btns">
         <div class="detail-contact-wrap">
           <button class="btn-secondary-action" onclick="this.nextElementSibling.classList.toggle('open')">
@@ -1639,6 +1724,10 @@ async function loadProductDetail(id) {
 }
 
 function copyProductLink(url) {
+  if(navigator.share) {
+    navigator.share({ title: document.title, url }).catch(()=>{});
+    return;
+  }
   if(navigator.clipboard) {
     navigator.clipboard.writeText(url).then(()=>showToast('Посилання скопійовано','success'));
   } else {
@@ -1835,6 +1924,7 @@ async function submitOrder() {
     const order = await res.json();
     cart = [];
     saveCart();
+    showOrderNotification(order.id);
     gtag('event', 'conversion', {
       'send_to': 'AW-18238999254/TMK6CKSh0MEcENaVhPlD',
       'value': subtotal,
@@ -1855,6 +1945,185 @@ async function submitOrder() {
     }, 1000);
   } catch(e) { showToast('Помилка. Спробуйте ще раз.','error'); }
 }
+
+// ============ WISHLIST ============
+const WISHLIST_KEY = 'olegauto_wishlist';
+function getWishlist() { try { return JSON.parse(localStorage.getItem(WISHLIST_KEY)) || []; } catch { return []; } }
+function isWishlisted(id) { return getWishlist().includes(id); }
+function toggleWishlist(id, e) {
+  if(e) e.stopPropagation();
+  const list = getWishlist();
+  const idx = list.indexOf(id);
+  if(idx >= 0) list.splice(idx,1); else list.push(id);
+  localStorage.setItem(WISHLIST_KEY, JSON.stringify(list));
+  const inList = list.includes(id);
+  document.querySelectorAll(`.wish-btn[data-id="${id}"]`).forEach(btn => {
+    btn.classList.toggle('active', inList);
+    btn.innerHTML = inList ? '<i class="fas fa-heart"></i>' : '<i class="far fa-heart"></i>';
+    btn.title = inList ? 'Видалити з вибраного' : 'В обране';
+  });
+  updateWishlistBadge();
+  showToast(inList ? 'Додано до вибраного ♡' : 'Видалено з вибраного', inList ? 'success' : 'info');
+}
+function updateWishlistBadge() {
+  const count = getWishlist().length;
+  const badge = document.getElementById('wishlistBadge');
+  if(badge) { badge.textContent = count; badge.style.display = count > 0 ? 'flex' : 'none'; }
+}
+async function loadWishlistPage() {
+  const el = document.getElementById('wishlistContent');
+  const ids = getWishlist();
+  if(!ids.length) {
+    el.innerHTML = '<div style="text-align:center;padding:60px 20px"><div style="font-size:60px">🤍</div><h3 style="margin:16px 0 8px;color:var(--gray-700)">Вибране порожнє</h3><p style="color:var(--gray-500);margin-bottom:24px">Натискайте ♡ на товарах щоб зберігати</p><button class="btn-primary" onclick="showPage(\'catalog\')"><i class="fas fa-th-large"></i> До каталогу</button></div>';
+    return;
+  }
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const products = await Promise.all(ids.map(id => api('/api/products/'+id)));
+    const valid = products.filter(p => p && !p.error);
+    el.innerHTML = `<div class="product-grid">${valid.map(renderProductCard).join('')}</div>`;
+  } catch { el.innerHTML = '<p style="color:red;padding:20px">Помилка завантаження</p>'; }
+}
+
+// ============ COMPARISON ============
+let compareList = [];
+function toggleCompare(id, name, e) {
+  if(e) e.stopPropagation();
+  const idx = compareList.findIndex(x=>x.id===id);
+  if(idx >= 0) { compareList.splice(idx,1); }
+  else if(compareList.length >= 3) { showToast('Максимум 3 товари для порівняння','error'); return; }
+  else { compareList.push({id, name}); }
+  const inList = compareList.some(x=>x.id===id);
+  document.querySelectorAll(`.compare-btn[data-id="${id}"]`).forEach(btn => btn.classList.toggle('active', inList));
+  updateCompareBar();
+  if(compareList.length===1) showToast('Оберіть ще 1–2 товари для порівняння','info');
+}
+function updateCompareBar() {
+  const bar = document.getElementById('compareBar');
+  const items = document.getElementById('compareBarItems');
+  if(!compareList.length) { bar.classList.remove('show'); return; }
+  bar.classList.add('show');
+  items.innerHTML = compareList.map(x =>
+    `<div class="compare-chip" onclick="toggleCompare(${x.id},${JSON.stringify(x.name)})">
+      ${x.name.substring(0,22)}${x.name.length>22?'...':''} <i class="fas fa-times"></i>
+    </div>`
+  ).join('');
+}
+function clearCompare() {
+  compareList = [];
+  document.querySelectorAll('.compare-btn').forEach(b=>b.classList.remove('active'));
+  updateCompareBar();
+}
+async function openComparison() {
+  if(compareList.length < 2) { showToast('Оберіть мінімум 2 товари','error'); return; }
+  const modal = document.getElementById('compareModal');
+  const table = document.getElementById('compareTable');
+  table.innerHTML = '<div class="loading" style="padding:40px"><div class="spinner"></div></div>';
+  modal.classList.add('open');
+  try {
+    const products = await Promise.all(compareList.map(x => api('/api/products/'+x.id)));
+    const fields = [
+      {key:'price', label:'Ціна', fmt: v=>`<strong style="color:var(--orange)">€${(+v).toLocaleString('de-DE')}</strong>`},
+      {key:'condition', label:'Стан', fmt: v=>COND_LABELS[v]||v},
+      {key:'category', label:'Категорія', fmt: v=>v},
+      {key:'brand', label:'Бренд', fmt: v=>v},
+      {key:'stock', label:'В наявності', fmt: v=>v>0?`✅ ${v} шт`:'❌ Немає'},
+    ];
+    table.innerHTML = `
+<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1.5px solid var(--gray-100)">
+  <h3 style="margin:0;font-size:17px;font-weight:700">Порівняння товарів</h3>
+  <button onclick="document.getElementById('compareModal').classList.remove('open')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-500);line-height:1">✕</button>
+</div>
+<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+<table style="width:100%;border-collapse:collapse;min-width:${products.length*180}px">
+  <thead><tr>
+    <td style="padding:12px 14px;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;width:90px;vertical-align:top"></td>
+    ${products.map(p=>`<td style="padding:12px 14px;text-align:center;border-left:1px solid var(--gray-100);vertical-align:top">
+      <div style="font-size:13px;font-weight:700;color:var(--gray-800);margin-bottom:8px;line-height:1.3">${p.name}</div>
+      <button onclick="addToCart(${p.id});document.getElementById('compareModal').classList.remove('open')" style="background:var(--orange);color:#fff;border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">В кошик</button>
+    </td>`).join('')}
+  </tr></thead>
+  <tbody>${fields.map(f=>`<tr style="border-top:1px solid var(--gray-100)">
+    <td style="padding:11px 14px;font-size:12px;font-weight:600;color:var(--gray-500)">${f.label}</td>
+    ${products.map(p=>`<td style="padding:11px 14px;text-align:center;border-left:1px solid var(--gray-100);font-size:14px">${f.fmt(p[f.key])}</td>`).join('')}
+  </tr>`).join('')}</tbody>
+</table>
+</div>`;
+  } catch { table.innerHTML = '<p style="padding:20px;color:red">Помилка завантаження</p>'; }
+}
+
+// ============ RECENTLY VIEWED ============
+const RECENT_KEY = 'olegauto_recent';
+function addToRecentlyViewed(p) {
+  try {
+    let list = JSON.parse(localStorage.getItem(RECENT_KEY)) || [];
+    list = list.filter(x=>x.id!==p.id);
+    list.unshift({id:p.id, name:p.name, price:p.price, image:p.image||null, category:p.category});
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0,10)));
+  } catch {}
+}
+function loadRecentlyViewed() {
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENT_KEY)) || [];
+    const section = document.getElementById('recentSection');
+    const scroll = document.getElementById('recentScroll');
+    if(!list.length || !section) return;
+    section.style.display = '';
+    scroll.innerHTML = list.map(p=>`
+<div class="recent-card" onclick="openProduct(${p.id})">
+  <div class="recent-card-img">${p.image?`<img src="${p.image}" alt="${p.name}" loading="lazy">`:(CAT_EMOJI[p.category]||'🔧')}</div>
+  <div class="recent-card-body">
+    <div class="recent-card-name">${p.name}</div>
+    <div class="recent-card-price">€${(+p.price).toLocaleString('de-DE')}</div>
+  </div>
+</div>`).join('');
+  } catch {}
+}
+function clearRecentlyViewed() {
+  localStorage.removeItem(RECENT_KEY);
+  const section = document.getElementById('recentSection');
+  if(section) section.style.display = 'none';
+}
+
+// ============ RESTOCK SUBSCRIPTION ============
+async function subscribeRestock(productId) {
+  const input = document.getElementById('restockPhone_'+productId);
+  const phone = input?.value?.trim();
+  if(!phone || phone.replace(/\D/g,'').length < 10) { showToast('Введіть номер телефону','error'); return; }
+  try {
+    await fetch('/api/notify-restock', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({productId, phone})});
+    showToast('Повідомимо як тільки з\'явиться! 🔔','success');
+    const wrap = document.getElementById('restockWrap_'+productId);
+    if(wrap) wrap.innerHTML = '<p style="color:var(--blue);font-weight:600"><i class="fas fa-check-circle"></i> Ви підписані — повідомимо про появу товару</p>';
+  } catch { showToast('Помилка. Спробуйте ще раз','error'); }
+}
+
+// ============ PWA / PUSH NOTIFICATIONS ============
+if('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+}
+function showOrderNotification(orderNum) {
+  if(!('Notification' in window)) return;
+  const doNotify = () => {
+    if(navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.ready.then(sw => {
+        sw.showNotification('Замовлення прийнято! 🎉', {
+          body: `Замовлення #${orderNum} оформлено. Зв'яжемось найближчим часом.`,
+          icon: '/favicon.svg',
+          tag: 'order-'+orderNum,
+          vibrate: [200, 100, 200],
+        });
+      }).catch(()=>{});
+    }
+  };
+  if(Notification.permission === 'granted') { doNotify(); }
+  else if(Notification.permission === 'default') {
+    Notification.requestPermission().then(p => { if(p==='granted') doNotify(); });
+  }
+}
+
+// init on load
+updateWishlistBadge();
 
 // ============ SEARCH ============
 const SEARCH_ALIASES = {
