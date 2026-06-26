@@ -210,7 +210,10 @@ app.get('/api/products', (req, res) => {
 
 app.get('/api/products/:id', (req, res) => {
   const products = readData('products.json');
-  const p = products.find(p => p.id === parseInt(req.params.id));
+  const numId = parseInt(req.params.id);
+  const p = isNaN(numId)
+    ? products.find(p => p.article && p.article.toLowerCase() === req.params.id.toLowerCase())
+    : products.find(p => p.id === numId);
   if (!p) return res.status(404).json({ error: 'Not found' });
   res.json(p);
 });

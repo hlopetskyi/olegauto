@@ -197,7 +197,7 @@
   .cart-item-meta{font-size:12px;color:var(--gray-500)}
   .cart-item-price{font-size:15px;font-weight:700;color:var(--orange);white-space:nowrap}
   .qty-ctrl{display:flex;align-items:center;gap:8px}
-  .qty-btn{width:30px;height:30px;border:1.5px solid var(--gray-200);background:#fff;border-radius:6px;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+  .qty-btn{width:44px;height:44px;border:1.5px solid var(--gray-200);background:#fff;border-radius:6px;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .2s;cursor:pointer}
   .qty-btn:hover{border-color:var(--blue);color:var(--blue)}
   .qty-val{font-weight:600;font-size:15px;min-width:24px;text-align:center}
   .cart-del{background:none;border:none;color:var(--gray-400);font-size:18px;transition:color .2s}
@@ -1108,7 +1108,7 @@ function showPage(name, opts={}, noPush=false) {
 
 function handlePath() {
   const p = location.pathname;
-  if (p.startsWith('/product/')) showPage('product', {id: parseInt(p.replace('/product/',''))}, true);
+  if (p.startsWith('/product/')) { const slug = p.replace('/product/',''); showPage('product', {id: isNaN(+slug) ? slug : parseInt(slug)}, true); }
   else if (p === '/catalog') showPage('catalog', {}, true);
   else if (p === '/contacts') showPage('contacts', {}, true);
   else if (p === '/cart') showPage('cart', {}, true);
@@ -1741,19 +1741,19 @@ function renderCart() {
     <div class="checkout-form" id="checkoutForm">
       <h3><i class="fas fa-clipboard-list" style="color:var(--orange);margin-right:8px"></i>Оформити замовлення</h3>
       <div class="form-row">
-        <div class="form-field"><label>Ім'я та прізвище *</label><input type="text" id="oName" placeholder="" required></div>
-        <div class="form-field"><label>Телефон *</label><input type="tel" id="oPhone" value="+380" required></div>
+        <div class="form-field"><label for="oName">Ім'я та прізвище *</label><input type="text" id="oName" placeholder="Іван Іваненко" autocomplete="name" required></div>
+        <div class="form-field"><label for="oPhone">Телефон *</label><input type="tel" id="oPhone" value="+380" placeholder="+380XXXXXXXXX" autocomplete="tel" required></div>
       </div>
       <div class="form-row">
         <div class="form-field">
-          <label>Доставка</label>
+          <label for="oDelivery">Доставка</label>
           <select id="oDelivery" onchange="onDeliveryChange()">
             <option value="nova_poshta">Нова Пошта</option>
             <option value="pickup">Самовивіз</option>
           </select>
         </div>
         <div class="form-field" id="npCityWrap">
-          <label>Місто</label>
+          <label for="oCity">Місто</label>
           <div style="position:relative">
             <input type="text" id="oCity" placeholder="Введіть місто..." autocomplete="off" oninput="npSearchCity(this.value)">
             <div id="npCityDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--gray-200);border-top:none;border-radius:0 0 8px 8px;z-index:50;max-height:220px;overflow-y:auto;box-shadow:var(--shadow)"></div>
@@ -1761,16 +1761,18 @@ function renderCart() {
         </div>
       </div>
       <div class="form-field" id="npWarehouseWrap" style="display:none">
-        <label>Відділення Нової Пошти</label>
-        <select id="oWarehouse">
-          <option value="">— спочатку оберіть місто —</option>
-        </select>
+        <label for="oWarehouseInput">Відділення Нової Пошти</label>
+        <div style="position:relative">
+          <input type="text" id="oWarehouseInput" placeholder="Пошук відділення..." autocomplete="off" oninput="npFilterWarehouses(this.value)" readonly>
+          <div id="npWarehouseDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--gray-200);border-top:none;border-radius:0 0 8px 8px;z-index:50;max-height:240px;overflow-y:auto;box-shadow:var(--shadow)"></div>
+        </div>
+        <input type="hidden" id="oWarehouse">
       </div>
       <div class="form-field" id="pickupAddressWrap" style="display:none">
         <label>Адреса самовивозу</label>
         <input type="text" value="Комарно, вул. Річкова 1, Львівська обл." readonly style="background:var(--gray-50);color:var(--gray-700)">
       </div>
-      <div class="form-field"><label>Коментар</label><textarea id="oComment" rows="3" placeholder=""></textarea></div>
+      <div class="form-field"><label for="oComment">Коментар</label><textarea id="oComment" rows="3" placeholder="Додаткова інформація до замовлення..."></textarea></div>
       <button class="btn-checkout" onclick="submitOrder()"><i class="fas fa-check"></i> Підтвердити замовлення</button>
     </div>
   </div>
@@ -1811,8 +1813,7 @@ async function submitOrder() {
   if(phone.replace(/\D/g,'').length < 12){ showToast('Введіть повний номер телефону (9 цифр після +380)','error'); return; }
 
   const delivery = document.getElementById('oDelivery').value;
-  const warehouseEl = document.getElementById('oWarehouse');
-  const warehouseLabel = warehouseEl ? warehouseEl.options[warehouseEl.selectedIndex]?.text : '';
+  const warehouseLabel = (document.getElementById('oWarehouseInput')?.value || '').trim();
   const subtotal = cart.reduce((s,c)=>s+c.price*c.qty,0);
   const body = {
     customerName: name,
@@ -1976,6 +1977,8 @@ function npSearchCity(q) {
       if(!data.length) { dd.style.display = 'none'; return; }
       dd.innerHTML = data.map(c => `<div class="np-city-item" data-ref="${c.ref}" data-label="${c.label}" onclick="npSelectCity(this)">${c.label}</div>`).join('');
       dd.style.display = 'block';
+      // scroll input into view so iOS keyboard doesn't cover dropdown
+      setTimeout(() => document.getElementById('oCity').scrollIntoView({behavior:'smooth', block:'center'}), 100);
     } catch(e) {}
   }, 350);
 }
@@ -1988,28 +1991,60 @@ function npSelectCity(el) {
   npLoadWarehouses(_npSelectedCityRef);
 }
 
+let _npWarehouses = [];
+
 async function npLoadWarehouses(cityRef) {
-  const sel = document.getElementById('oWarehouse');
+  const input = document.getElementById('oWarehouseInput');
+  const hidden = document.getElementById('oWarehouse');
   const wrap = document.getElementById('npWarehouseWrap');
-  sel.innerHTML = '<option>Завантаження...</option>';
+  _npWarehouses = [];
+  input.value = 'Завантаження...';
+  input.readOnly = true;
+  hidden.value = '';
   wrap.style.display = '';
   try {
     const data = await api('/api/np/warehouses?cityRef=' + encodeURIComponent(cityRef));
-    if(!data.length) {
-      sel.innerHTML = '<option value="">Відділень не знайдено</option>';
-      return;
-    }
-    sel.innerHTML = '<option value="">— оберіть відділення —</option>' +
-      data.map(w => `<option value="${w.ref}">${w.label}</option>`).join('');
+    _npWarehouses = data;
+    input.value = '';
+    input.readOnly = false;
+    input.placeholder = data.length ? 'Пошук відділення...' : 'Відділень не знайдено';
+    input.focus();
+    npFilterWarehouses('');
+    setTimeout(() => input.scrollIntoView({behavior:'smooth', block:'center'}), 100);
   } catch(e) {
-    sel.innerHTML = '<option value="">Помилка завантаження</option>';
+    input.value = '';
+    input.placeholder = 'Помилка завантаження';
   }
 }
 
-// Close city dropdown on outside click
+function npFilterWarehouses(q) {
+  const dd = document.getElementById('npWarehouseDropdown');
+  const hidden = document.getElementById('oWarehouse');
+  const filtered = q.length < 1
+    ? _npWarehouses.slice(0, 50)
+    : _npWarehouses.filter(w => w.label.toLowerCase().includes(q.toLowerCase())).slice(0, 50);
+  if (!filtered.length) { dd.style.display = 'none'; return; }
+  dd.innerHTML = filtered.map(w =>
+    `<div class="np-city-item" data-ref="${w.ref}" data-label="${w.label.replace(/"/g,'&quot;')}"
+      onclick="npSelectWarehouse(this)">${w.label}</div>`
+  ).join('');
+  dd.style.display = 'block';
+}
+
+function npSelectWarehouse(el) {
+  document.getElementById('oWarehouseInput').value = el.dataset.label;
+  document.getElementById('oWarehouse').value = el.dataset.ref;
+  document.getElementById('npWarehouseDropdown').style.display = 'none';
+}
+
+// Close NP dropdowns on outside click
 document.addEventListener('click', e => {
   if(!e.target.closest('#npCityWrap')) {
     const dd = document.getElementById('npCityDropdown');
+    if(dd) dd.style.display = 'none';
+  }
+  if(!e.target.closest('#npWarehouseWrap')) {
+    const dd = document.getElementById('npWarehouseDropdown');
     if(dd) dd.style.display = 'none';
   }
 });
