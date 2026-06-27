@@ -644,6 +644,10 @@ function showSection(name) {
 }
 
 window.addEventListener('popstate', e => {
+  if(document.getElementById('productPreviewModal')?.style.display !== 'none') {
+    closeProductPreview();
+    return;
+  }
   const name = e.state?.section || location.hash.replace('#','') || 'dashboard';
   _sectionNoPush = true;
   showSection(name);
@@ -2120,6 +2124,7 @@ function openProductPreview(id) {
   const modal = document.getElementById('productPreviewModal');
   modal.style.display = 'flex';
   modal.onclick = e => { if(e.target===modal) closeProductPreview(); };
+  history.pushState({section: history.state?.section || 'products', previewOpen: true}, '', location.href);
 }
 function closeProductPreview() {
   document.getElementById('productPreviewModal').style.display = 'none';
