@@ -628,11 +628,14 @@ const STATUS_OPTS = [
 ];
 
 // ============ NAVIGATION ============
+let _sectionNoPush = false;
 function showSection(name) {
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('section-'+name).classList.add('active');
   document.getElementById('nav-'+name)?.classList.add('active');
+
+  if(!_sectionNoPush) history.pushState({section: name}, '', '/admin#'+name);
 
   if(name==='dashboard') loadDashboard();
   if(name==='products') loadProducts(arguments[1]);
@@ -640,8 +643,19 @@ function showSection(name) {
   if(name==='settings') { loadAdmins(); loadScheduleEditor(); }
 }
 
+window.addEventListener('popstate', e => {
+  const name = e.state?.section || location.hash.replace('#','') || 'dashboard';
+  _sectionNoPush = true;
+  showSection(name);
+  _sectionNoPush = false;
+});
+
 window.addEventListener('load', ()=>{
-  loadDashboard();
+  const initSection = location.hash.replace('#','') || 'dashboard';
+  _sectionNoPush = true;
+  showSection(initSection);
+  _sectionNoPush = false;
+  if(!location.hash) history.replaceState({section:'dashboard'}, '', '/admin#dashboard');
   initNotifications();
   setInterval(loadDashboard, 60000);
   document.addEventListener('keydown', e => {
