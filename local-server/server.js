@@ -633,10 +633,16 @@ function loadNotify() { try { return JSON.parse(fs.readFileSync(NOTIFY_FILE, 'ut
 app.post('/api/notify-restock', (req, res) => {
   const { productId, phone } = req.body || {};
   if(!productId || !phone) return res.status(400).json({ error: 'Missing fields' });
+  const digits = String(phone).replace(/\D/g, '');
+  if(digits.length < 10 || digits.length > 13) return res.status(400).json({ error: 'Invalid phone' });
+  const products = readData('products.json');
+  const product = products.find(p => p.id === parseInt(productId));
+  if(!product) return res.status(404).json({ error: 'Product not found' });
   const list = loadNotify();
-  const already = list.find(x => x.productId === productId && x.phone === phone);
+  if(list.length >= 5000) return res.status(429).json({ error: 'Too many subscriptions' });
+  const already = list.find(x => x.productId === parseInt(productId) && x.phone === phone);
   if(!already) {
-    list.push({ productId, phone, createdAt: new Date().toISOString() });
+    list.push({ productId: parseInt(productId), productName: product.name, phone, createdAt: new Date().toISOString() });
     fs.writeFileSync(NOTIFY_FILE, JSON.stringify(list, null, 2));
   }
   res.json({ ok: true });
