@@ -10,6 +10,18 @@
   gtag('js', new Date());
   gtag('config', 'G-VNW7PGE0M3');
   gtag('config', 'AW-18238999254');
+
+  // Track phone / Viber clicks as GA4 events (delegated: covers static + dynamic links)
+  document.addEventListener('click', function(e) {
+    const a = e.target.closest && e.target.closest('a[href^="tel:"], a[href^="viber:"]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    gtag('event', href.indexOf('viber') === 0 ? 'viber_click' : 'phone_call_click', {
+      link_url: href,
+      page_path: location.pathname,
+      link_text: (a.textContent || '').trim().substring(0, 50)
+    });
+  });
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
