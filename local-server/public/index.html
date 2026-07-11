@@ -25,6 +25,7 @@
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#002395">
@@ -34,12 +35,22 @@
 <meta name="description" content="Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою по всій Україні.">
 <meta name="keywords" content="запчастини Renault, запчастини Peugeot, запчастини Citroen, запчастини Fiat, автозапчастини Україна, б/у запчастини французькі авто">
 <link rel="canonical" href="https://olegavto.com/">
+<link rel="alternate" hreflang="uk-ua" href="https://olegavto.com/">
+<link rel="alternate" hreflang="x-default" href="https://olegavto.com/">
 <meta property="og:site_name" content="OlegAvto">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://olegavto.com/">
 <meta property="og:title" content="OlegAvto — Запчастини для французьких авто">
 <meta property="og:description" content="Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою.">
 <meta property="og:locale" content="uk_UA">
+<meta property="og:image" content="https://olegavto.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="OlegAvto — запчастини для французьких авто">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="OlegAvto — Запчастини для французьких авто">
+<meta name="twitter:description" content="Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою.">
+<meta name="twitter:image" content="https://olegavto.com/og-image.png">
 <meta name="robots" content="index, follow">
 <script type="application/ld+json" id="jsonLd">
 {
@@ -48,8 +59,20 @@
   "name": "OlegAvto",
   "description": "Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні",
   "url": "https://olegavto.com",
+  "logo": "https://olegavto.com/icon-512.png",
+  "image": "https://olegavto.com/og-image.png",
+  "telephone": "+380677448965",
   "address": {"@type": "PostalAddress", "addressCountry": "UA"},
-  "areaServed": "UA"
+  "areaServed": "UA",
+  "contactPoint": [
+    {"@type": "ContactPoint", "telephone": "+380677448965", "contactType": "sales", "areaServed": "UA", "availableLanguage": "uk"},
+    {"@type": "ContactPoint", "telephone": "+380677533189", "contactType": "customer support", "areaServed": "UA", "availableLanguage": "uk"}
+  ],
+  "sameAs": ["viber://chat?number=%2B380677448965"],
+  "openingHoursSpecification": [
+    {"@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"], "opens": "09:00", "closes": "18:00"},
+    {"@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "09:00", "closes": "14:00"}
+  ]
 }
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1589,7 +1612,7 @@ function renderProductCard(p) {
       <span class="badge ${COND_BADGE[p.condition]||'badge-new'}">${COND_LABELS[p.condition]||p.condition}</span>
       ${(p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand}]).map(c=>`<span class="badge badge-brand">${c.brand}</span>`).join('')}
     </div>
-    <div class="product-name">${p.name}</div>
+    <a href="/product/${p.id}" class="product-name" onclick="event.preventDefault();event.stopPropagation();openProduct(${p.id})">${p.name}</a>
     <div class="product-meta">${(p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand,model:p.model}]).map(c=>c.model?`${c.brand} ${c.model}`:c.brand).join(', ')}${p.yearFrom?` · ${p.yearFrom}–${p.yearTo||'...'}`:''}</div>
     ${p.article?`<div class="product-article">Арт: ${p.article}</div>`:''}
     <div style="margin-top:auto">
@@ -1646,8 +1669,9 @@ async function loadProductDetail(id) {
     const compatStr = (p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand,model:p.model}])
       .filter(c=>c.brand).map(c=>c.model?`${c.brand} ${c.model}`:c.brand).join(', ');
     const metaDesc = `${p.name}${compatStr?' для '+compatStr:''}. ${p.condition==='new'?'Новий':'Б/У'}. Ціна: €${p.price}. ${p.stock>0?'В наявності.':'Під замовлення.'} Доставка Новою Поштою.`;
+    const _pvu = new Date(Date.now() + 30*86400000).toISOString().slice(0,10);
     updateMeta({
-      title: `${p.name} — OlegAvto`,
+      title: `${p.name} — купити | OlegAvto`,
       desc: metaDesc,
       image: imgs[0] || '',
       url: `${SITE}/product/${p.id}`,
@@ -1658,13 +1682,17 @@ async function loadProductDetail(id) {
         description: metaDesc,
         image: imgs,
         sku: p.article || p.oem,
+        mpn: p.oem || undefined,
         brand: { '@type': 'Brand', name: p.supplierBrand || p.brand || 'OlegAvto' },
+        category: p.category || undefined,
+        itemCondition: p.condition === 'used' ? 'https://schema.org/UsedCondition' : 'https://schema.org/NewCondition',
         offers: {
           '@type': 'Offer',
           price: p.price,
           priceCurrency: 'EUR',
           availability: p.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
           url: `${SITE}/product/${p.id}`,
+          priceValidUntil: _pvu,
           seller: { '@type': 'Organization', name: 'OlegAvto' }
         }
       }

@@ -122,8 +122,21 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '1d', setHeaders(res) { res.setHeader('Cache-Control', 'public, max-age=86400'); }
+}));
+// index:false so "/" does NOT auto-serve the raw shell — the SEO head-injection
+// middleware below must handle "/" (and other page routes) instead.
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: false,
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  }
+}));
 
 // Ensure uploads dir exists
 if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
@@ -609,18 +622,31 @@ app.get('/robots.txt', (req, res) => {
   res.send(`User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml\n`);
 });
 
+function xmlEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
 app.get('/sitemap.xml', (req, res) => {
   const products = readData('products.json');
   const staticPages = [['', '1.0'], ['catalog', '0.7'], ['contacts', '0.7']];
-  const productUrls = products.map(p =>
-    `  <url><loc>${SITE_URL}/product/${p.id}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`
-  );
+  // /cart and /wishlist are intentionally excluded (thin utility, noindex)
+  const productUrls = products.map(p => {
+    const lastmod = (p.updatedAt || p.createdAt || '').slice(0, 10);
+    const img = (p.images && p.images.length) ? p.images[0] : (p.image || '');
+    const imgAbs = img ? (/^https?:/i.test(img) ? img : SITE_URL + img) : '';
+    return `  <url><loc>${SITE_URL}/product/${p.id}</loc>` +
+      (lastmod ? `<lastmod>${lastmod}</lastmod>` : '') +
+      `<changefreq>weekly</changefreq><priority>0.8</priority>` +
+      (imgAbs ? `<image:image><image:loc>${xmlEsc(imgAbs)}</image:loc><image:title>${xmlEsc(p.name)}</image:title></image:image>` : '') +
+      `</url>`;
+  });
   const staticUrls = staticPages.map(([p, pri]) =>
     `  <url><loc>${SITE_URL}/${p}</loc><changefreq>daily</changefreq><priority>${pri}</priority></url>`
   );
   res.type('application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${staticUrls.join('\n')}
 ${productUrls.join('\n')}
 </urlset>`);
@@ -757,7 +783,205 @@ app.post('/api/contact', (req, res) => {
 app.get('/admin', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/admin/*', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.use('/api', dynamicAdminAuth);
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// ---------- SEO: per-route <head> injection + JSON-LD (server-side) ----------
+const SHELL_PATH = path.join(__dirname, 'public', 'index.html');
+let _shellCache = null;
+function shellHtml() {
+  if (_shellCache) return _shellCache;
+  _shellCache = fs.readFileSync(SHELL_PATH, 'utf8');
+  return _shellCache;
+}
+const OG_DEFAULT = SITE_URL + '/og-image.png';
+
+// Escape for HTML attribute context (title / meta / og / twitter)
+function htmlAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+// Serialize for <script type="application/ld+json"> — JSON only, then neutralize </script
+function jsonLdSafe(obj) {
+  return JSON.stringify(obj).replace(/<\//g, '<\\/');
+}
+function getProductById(id) {
+  const numId = parseInt(id);
+  const products = readData('products.json');
+  const p = isNaN(numId)
+    ? products.find(x => x.article && x.article.toLowerCase() === String(id).toLowerCase())
+    : products.find(x => x.id === numId);
+  return { p, dataAvailable: products.length > 0 };
+}
+function productCompatStr(p) {
+  const arr = (p.compatibility && p.compatibility.length) ? p.compatibility : [{ brand: p.brand, model: p.model }];
+  return arr.filter(c => c.brand).map(c => c.model ? `${c.brand} ${c.model}` : c.brand).join(', ');
+}
+function futureDate(days) {
+  const d = new Date(Date.now() + days * 86400000);
+  return d.toISOString().slice(0, 10);
+}
+// Replace the shell's default head tags with per-route values (string-replace on unique tags)
+function injectHead(html, o) {
+  let out = html;
+  if (o.title != null) {
+    const T = htmlAttr(o.title);
+    out = out.replace('<title>OlegAvto — Запчастини для французьких авто</title>', `<title>${T}</title>`)
+             .replace('<meta property="og:title" content="OlegAvto — Запчастини для французьких авто">', `<meta property="og:title" content="${T}">`)
+             .replace('<meta name="twitter:title" content="OlegAvto — Запчастини для французьких авто">', `<meta name="twitter:title" content="${T}">`);
+  }
+  if (o.desc != null) {
+    const D = htmlAttr(o.desc);
+    out = out.replace('<meta name="description" content="Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою по всій Україні.">', `<meta name="description" content="${D}">`)
+             .replace('<meta property="og:description" content="Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою.">', `<meta property="og:description" content="${D}">`)
+             .replace('<meta name="twitter:description" content="Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою.">', `<meta name="twitter:description" content="${D}">`);
+  }
+  if (o.canonical != null) {
+    out = out.replace('<link rel="canonical" href="https://olegavto.com/">', `<link rel="canonical" href="${htmlAttr(o.canonical)}">`)
+             .replace('<link rel="alternate" hreflang="uk-ua" href="https://olegavto.com/">', `<link rel="alternate" hreflang="uk-ua" href="${htmlAttr(o.canonical)}">`);
+  }
+  if (o.ogUrl != null) {
+    out = out.replace('<meta property="og:url" content="https://olegavto.com/">', `<meta property="og:url" content="${htmlAttr(o.ogUrl)}">`);
+  }
+  if (o.ogImage != null) {
+    out = out.replace('<meta property="og:image" content="https://olegavto.com/og-image.png">', `<meta property="og:image" content="${htmlAttr(o.ogImage)}">`)
+             .replace('<meta name="twitter:image" content="https://olegavto.com/og-image.png">', `<meta name="twitter:image" content="${htmlAttr(o.ogImage)}">`);
+  }
+  if (o.robots != null) {
+    out = out.replace('<meta name="robots" content="index, follow">', `<meta name="robots" content="${htmlAttr(o.robots)}">`);
+  }
+  if (o.jsonLdBlock != null) {
+    out = out.replace(/<script type="application\/ld\+json" id="jsonLd">[\s\S]*?<\/script>/, o.jsonLdBlock);
+  }
+  if (o.noscript != null) {
+    out = out.replace('</body>', o.noscript + '</body>');
+  }
+  return out;
+}
+function notFoundHtml() {
+  return `<!DOCTYPE html><html lang="uk"><head><meta charset="UTF-8">` +
+    `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+    `<meta name="robots" content="noindex, follow">` +
+    `<title>Сторінку не знайдено — OlegAvto</title></head>` +
+    `<body style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#0f172a">` +
+    `<h1>404 — Сторінку не знайдено</h1>` +
+    `<p>Такої сторінки не існує або товар уже продано.</p>` +
+    `<p><a href="/">На головну</a> &middot; <a href="/catalog">Каталог запчастин</a></p></body></html>`;
+}
+
+app.get('/favicon.ico', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.type('image/png');
+  res.sendFile(path.join(__dirname, 'public', 'icon-192.png'));
+});
+
+// Home — shell default head already IS the homepage head
+app.get('/', (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.send(shellHtml());
+});
+
+// Catalog (page-1 canonical = /catalog; ?page=N self-canonicalizes)
+app.get('/catalog', (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const canonical = page > 1 ? `${SITE_URL}/catalog?page=${page}` : `${SITE_URL}/catalog`;
+  const ns = `<noscript><div><h1>Каталог автозапчастин Renault, Peugeot, Citroën, Fiat</h1>` +
+    `<p>Понад 15 000 нових та вживаних запчастин для французьких авто. Доставка Новою Поштою по всій Україні.</p>` +
+    `<p><a href="/catalog">Усі товари</a> &middot; <a href="/contacts">Контакти</a> &middot; <a href="/">Головна</a></p></div></noscript>`;
+  res.set('Cache-Control', 'no-cache');
+  res.send(injectHead(shellHtml(), {
+    title: 'Каталог запчастин Renault, Peugeot, Citroën, Fiat — OlegAvto',
+    desc: 'Каталог нових та б/у автозапчастин для Renault, Peugeot, Citroën, Fiat. Понад 15 000 позицій. Доставка Новою Поштою по всій Україні.',
+    canonical, ogUrl: canonical, noscript: ns
+  }));
+});
+
+app.get('/contacts', (req, res) => {
+  const canonical = `${SITE_URL}/contacts`;
+  const ns = `<noscript><div><h1>Контакти OlegAvto</h1><p>Телефон: +380677448965, +380677533189.</p>` +
+    `<p>Графік: Пн–Пт 09:00–18:00, Сб 09:00–14:00, Нд вихідний.</p>` +
+    `<p><a href="/">Головна</a> &middot; <a href="/catalog">Каталог запчастин</a></p></div></noscript>`;
+  res.set('Cache-Control', 'no-cache');
+  res.send(injectHead(shellHtml(), {
+    title: 'Контакти OlegAvto — телефон, адреса, графік роботи',
+    desc: 'Контакти магазину OlegAvto: телефони, графік роботи, доставка Новою Поштою. Консультація по запчастинах для Renault, Peugeot, Citroën, Fiat.',
+    canonical, ogUrl: canonical, noscript: ns
+  }));
+});
+
+// Cart / Wishlist — thin utility pages: noindex, still boot the SPA
+app.get(['/cart', '/wishlist'], (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.send(injectHead(shellHtml(), {
+    canonical: SITE_URL + req.path, ogUrl: SITE_URL + req.path, robots: 'noindex, follow'
+  }));
+});
+
+// Product detail
+app.get('/product/:id', (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  let lookup;
+  try {
+    lookup = getProductById(req.params.id);
+  } catch (e) {
+    return res.send(shellHtml()); // data error — never 500 a real route
+  }
+  if (!lookup.dataAvailable) return res.send(shellHtml()); // store unavailable — serve unmodified shell
+  const p = lookup.p;
+  if (!p) { res.status(404); return res.send(notFoundHtml()); } // genuinely missing product
+
+  const cs = productCompatStr(p);
+  const title = `${p.name} — купити | OlegAvto`;
+  const desc = `${p.name}${cs ? ' для ' + cs : ''}. ${p.condition === 'new' ? 'Новий' : 'Б/У'}. Ціна: €${p.price}. ${p.stock > 0 ? 'В наявності.' : 'Під замовлення.'} Доставка Новою Поштою.`;
+  const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+  const canonical = `${SITE_URL}/product/${p.id}`;
+
+  const productLd = {
+    '@context': 'https://schema.org', '@type': 'Product',
+    name: p.name,
+    image: imgs.length ? imgs : undefined,
+    description: desc,
+    sku: p.article || p.oem || undefined,
+    mpn: p.oem || undefined,
+    brand: { '@type': 'Brand', name: p.supplierBrand || p.brand || 'OlegAvto' },
+    category: p.category || undefined,
+    itemCondition: p.condition === 'used' ? 'https://schema.org/UsedCondition' : 'https://schema.org/NewCondition',
+    offers: {
+      '@type': 'Offer', price: p.price, priceCurrency: 'EUR',
+      availability: p.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url: canonical, priceValidUntil: futureDate(30),
+      seller: { '@type': 'Organization', name: 'OlegAvto' }
+    }
+  };
+  const breadcrumbLd = {
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Головна', item: SITE_URL + '/' },
+      { '@type': 'ListItem', position: 2, name: 'Каталог', item: SITE_URL + '/catalog' },
+      { '@type': 'ListItem', position: 3, name: p.name, item: canonical }
+    ]
+  };
+  const jsonLdBlock =
+    `<script type="application/ld+json" id="jsonLd">${jsonLdSafe(productLd)}</script>\n` +
+    `<script type="application/ld+json">${jsonLdSafe(breadcrumbLd)}</script>`;
+
+  const ns = `<noscript><div><h1>${htmlAttr(p.name)}</h1>` +
+    `<p>${htmlAttr(desc)}</p>` +
+    (cs ? `<p>Сумісність: ${htmlAttr(cs)}</p>` : '') +
+    (p.oem ? `<p>OEM: ${htmlAttr(p.oem)}</p>` : '') +
+    `<p>Ціна: €${htmlAttr(p.price)}</p>` +
+    `<p><a href="/catalog">Каталог запчастин</a> &middot; <a href="/contacts">Контакти</a> &middot; <a href="/">Головна</a></p>` +
+    `</div></noscript>`;
+
+  res.send(injectHead(shellHtml(), {
+    title, desc, canonical, ogUrl: canonical, ogImage: OG_DEFAULT,
+    jsonLdBlock, noscript: ns
+  }));
+});
+
+// Real 404 for everything else (no more shell-for-all soft-404)
+app.get('*', (req, res) => {
+  res.status(404).set('Cache-Control', 'no-cache').send(notFoundHtml());
+});
 
 app.listen(PORT, () => {
   console.log('\n OlegAuto сервер запущено!\n');
