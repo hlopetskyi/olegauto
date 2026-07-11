@@ -218,6 +218,14 @@ app.get('/api/products', (req, res) => {
   else if (sort === 'price_desc') products.sort((a, b) => b.price - a.price);
   else if (sort === 'newest') products.sort((a, b) => b.id - a.id);
 
+  // Optional pagination (additive; absent = full list, unchanged behaviour).
+  // Applied AFTER filtering+sorting so limit returns the top-N of the result set.
+  const limit = parseInt(req.query.limit);
+  if (!isNaN(limit) && limit > 0) {
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
+    products = products.slice(offset, offset + limit);
+  }
+
   res.json(products);
 });
 

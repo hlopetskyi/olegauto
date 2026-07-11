@@ -1340,7 +1340,7 @@ async function loadHomeProducts() {
   const el = document.getElementById('homeProducts');
   el.innerHTML = '<div class="loading"><div class="spinner"></div><span>Завантаження...</span></div>';
   try {
-    const products = await api('/api/products?sort=newest');
+    const products = await api('/api/products?sort=newest&limit=8');
     const latest = products.slice(0,8);
     if(!latest.length){ el.innerHTML='<div class="empty-state"><i class="fas fa-box-open"></i><p>Товарів поки немає</p></div>'; return; }
     el.innerHTML = '<div class="product-grid">'+latest.map(renderProductCard).join('')+'</div>';
