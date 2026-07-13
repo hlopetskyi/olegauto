@@ -787,6 +787,118 @@ app.post('/api/contact', (req, res) => {
   res.json({ ok: true });
 });
 
+// ============ ANALYTICS (first-party) ============
+const ANALYTICS_FILE = path.join(__dirname, 'data', 'analytics.jsonl');
+const TRACK_EVENTS = ['page_view', 'product_view', 'add_to_cart', 'begin_checkout', 'purchase', 'phone_click', 'viber_click'];
+const BOT_RE = /bot|crawl|spider|slurp|bing|yandex|google|facebook|preview|headless|curl|wget|monitor|lighthouse/i;
+
+// Public collector — records one event per call (fire-and-forget from client)
+app.post('/api/track', (req, res) => {
+  try {
+    const ua = req.get('user-agent') || '';
+    if (BOT_RE.test(ua)) return res.status(204).end(); // skip bots/crawlers
+    const b = req.body || {};
+    if (!TRACK_EVENTS.includes(b.ev)) return res.status(204).end();
+    const rec = {
+      t: new Date().toISOString(),
+      ev: b.ev,
+      sid: String(b.sid || '').slice(0, 40),
+      vid: String(b.vid || '').slice(0, 40),
+      device: b.device === 'mobile' ? 'mobile' : 'desktop',
+      path: String(b.path || '').slice(0, 200),
+      pid: b.pid != null ? parseInt(b.pid) || null : null,
+      name: String(b.name || '').slice(0, 120),
+      value: b.value != null ? Number(b.value) || 0 : 0
+    };
+    fs.appendFileSync(ANALYTICS_FILE, JSON.stringify(rec) + '\n');
+    res.status(204).end();
+  } catch (e) { res.status(204).end(); }
+});
+
+// Admin-only aggregation
+app.get('/api/analytics', dynamicAdminAuth, (req, res) => {
+  const days = Math.min(365, Math.max(1, parseInt(req.query.days) || 30));
+  const since = Date.now() - days * 86400000;
+  let events = [];
+  try {
+    const raw = fs.readFileSync(ANALYTICS_FILE, 'utf8');
+    for (const line of raw.split('\n')) {
+      if (!line) continue;
+      try {
+        const e = JSON.parse(line);
+        if (new Date(e.t).getTime() >= since) events.push(e);
+      } catch {}
+    }
+  } catch { events = []; }
+
+  const uniq = (arr) => new Set(arr).size;
+  const bySession = {}; // sid -> set of events
+  for (const e of events) {
+    if (!e.sid) continue;
+    (bySession[e.sid] = bySession[e.sid] || new Set()).add(e.ev);
+  }
+  const sessionsWith = (ev) => Object.values(bySession).filter(s => s.has(ev)).length;
+
+  // Device split by unique session
+  const devOfSession = {};
+  for (const e of events) if (e.sid) devOfSession[e.sid] = e.device;
+  const deviceSessions = Object.values(devOfSession);
+  const device = {
+    mobile: deviceSessions.filter(d => d === 'mobile').length,
+    desktop: deviceSessions.filter(d => d === 'desktop').length
+  };
+
+  // Top viewed products
+  const prodCounts = {};
+  for (const e of events) {
+    if (e.ev === 'product_view' && e.pid) {
+      const k = e.pid;
+      prodCounts[k] = prodCounts[k] || { pid: e.pid, name: e.name || ('#' + e.pid), count: 0 };
+      prodCounts[k].count++;
+    }
+  }
+  const topProducts = Object.values(prodCounts).sort((a, b) => b.count - a.count).slice(0, 10);
+
+  // Daily series (visitors = unique vid/day, orders = purchase count/day)
+  const daily = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    const dayStr = d.toISOString().slice(0, 10);
+    const dayEvents = events.filter(e => (e.t || '').startsWith(dayStr));
+    daily.push({
+      date: dayStr,
+      visitors: uniq(dayEvents.map(e => e.vid).filter(Boolean)),
+      pageViews: dayEvents.filter(e => e.ev === 'page_view').length,
+      orders: dayEvents.filter(e => e.ev === 'purchase').length
+    });
+  }
+
+  res.json({
+    days,
+    totals: {
+      visitors: uniq(events.map(e => e.vid).filter(Boolean)),
+      sessions: uniq(events.map(e => e.sid).filter(Boolean)),
+      pageViews: events.filter(e => e.ev === 'page_view').length,
+      productViews: events.filter(e => e.ev === 'product_view').length,
+      phoneClicks: events.filter(e => e.ev === 'phone_click').length,
+      viberClicks: events.filter(e => e.ev === 'viber_click').length,
+      addToCart: events.filter(e => e.ev === 'add_to_cart').length,
+      orders: events.filter(e => e.ev === 'purchase').length,
+      events: events.length
+    },
+    device,
+    funnel: [
+      { stage: 'Зайшли на сайт', sessions: Object.keys(bySession).length },
+      { stage: 'Переглянули товар', sessions: sessionsWith('product_view') },
+      { stage: 'Додали в кошик', sessions: sessionsWith('add_to_cart') },
+      { stage: 'Перейшли до оформлення', sessions: sessionsWith('begin_checkout') },
+      { stage: 'Оформили замовлення', sessions: sessionsWith('purchase') }
+    ],
+    topProducts,
+    daily
+  });
+});
+
 // ============ PAGES ============
 app.get('/admin', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/admin/*', dynamicAdminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));

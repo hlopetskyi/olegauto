@@ -31,6 +31,24 @@
   .nav-item:hover{background:var(--sidebar-hover);color:#fff}
   .nav-item.active{background:rgba(0,35,149,.3);color:#fff;border-left-color:var(--orange)}
   .nav-item i{width:18px;text-align:center;font-size:16px}
+  /* Analytics */
+  .an-range-btn{border:none;background:transparent;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;color:var(--gray-500);cursor:pointer;transition:all .15s}
+  .an-range-btn.active{background:#fff;color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+  .an-funnel-row{margin-bottom:14px}
+  .an-funnel-head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+  .an-funnel-head b{font-weight:700;color:var(--gray-900)}
+  .an-funnel-bar{height:26px;background:var(--gray-100);border-radius:6px;overflow:hidden}
+  .an-funnel-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--blue-light,#1a3aad));border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-size:12px;font-weight:700;min-width:34px;transition:width .4s}
+  .an-drop{font-size:11px;color:var(--red);margin-top:2px}
+  .an-dev-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .an-dev-row .lbl{width:80px;font-size:13px;font-weight:600;color:var(--gray-700);display:flex;align-items:center;gap:6px}
+  .an-dev-bar{flex:1;height:22px;background:var(--gray-100);border-radius:6px;overflow:hidden}
+  .an-dev-fill{height:100%;border-radius:6px}
+  .an-top-row{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--gray-100)}
+  .an-top-row:last-child{border-bottom:none}
+  .an-top-rank{width:24px;height:24px;border-radius:6px;background:var(--gray-100);color:var(--gray-700);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .an-top-name{flex:1;font-size:14px;color:var(--gray-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .an-top-count{font-weight:700;color:var(--blue);font-size:14px}
   .sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.08)}
   .sidebar-footer a{color:rgba(255,255,255,.4);font-size:13px;text-decoration:none;display:flex;align-items:center;gap:8px}
   .sidebar-footer a:hover{color:#fff}
@@ -192,6 +210,9 @@
     <div class="nav-item active" onclick="showSection('dashboard')" id="nav-dashboard">
       <i class="fas fa-chart-bar"></i> Дашборд
     </div>
+    <div class="nav-item" onclick="showSection('analytics')" id="nav-analytics">
+      <i class="fas fa-chart-line"></i> Статистика
+    </div>
     <div class="nav-item" onclick="showSection('products')" id="nav-products">
       <i class="fas fa-boxes"></i> Товари
     </div>
@@ -274,6 +295,51 @@
           <button class="btn-primary btn-sm" onclick="showSection('products')">Всі товари</button>
         </div>
         <div id="dashLowStock"><div style="color:var(--gray-400);text-align:center;padding:30px">Завантаження...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== ANALYTICS ========== -->
+  <div class="section" id="section-analytics">
+    <div class="page-header">
+      <div class="page-title">Статистика сайту</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="anRange" style="display:flex;gap:4px;background:var(--gray-100);border-radius:8px;padding:3px">
+          <button class="an-range-btn active" data-days="7" onclick="setAnRange(7)">7 днів</button>
+          <button class="an-range-btn" data-days="30" onclick="setAnRange(30)">30 днів</button>
+          <button class="an-range-btn" data-days="90" onclick="setAnRange(90)">90 днів</button>
+        </div>
+        <button class="btn-primary" onclick="loadAnalytics()"><i class="fas fa-sync-alt"></i> Оновити</button>
+      </div>
+    </div>
+
+    <div id="anEmpty" style="display:none;background:#fff;border-radius:12px;padding:40px;text-align:center;color:var(--gray-400)">
+      <i class="fas fa-chart-line" style="font-size:40px;margin-bottom:12px;display:block;opacity:.4"></i>
+      Даних поки немає. Статистика почне збиратись після візитів на сайт.
+    </div>
+
+    <div id="anContent">
+      <div class="stats-grid" id="anCards"></div>
+
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title"><span><i class="fas fa-users" style="color:var(--blue);margin-right:8px"></i>Відвідувачі за період</span><span id="anVisitorsTotal" style="font-size:13px;font-weight:400;color:var(--gray-500)"></span></div>
+        <div id="anDailyChart" style="padding:8px 0"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+        <div class="card">
+          <div class="card-title"><span><i class="fas fa-filter" style="color:var(--orange);margin-right:8px"></i>Воронка продажів</span></div>
+          <div id="anFunnel" style="padding:6px 0"></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span><i class="fas fa-mobile-screen" style="color:var(--green);margin-right:8px"></i>Пристрої (сесії)</span></div>
+          <div id="anDevice" style="padding:16px 4px"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span><i class="fas fa-fire" style="color:var(--red);margin-right:8px"></i>Найпопулярніші товари</span></div>
+        <div id="anTopProducts"></div>
       </div>
     </div>
   </div>
@@ -638,6 +704,7 @@ function showSection(name) {
   if(!_sectionNoPush) history.pushState({section: name}, '', '/admin#'+name);
 
   if(name==='dashboard') loadDashboard();
+  if(name==='analytics') loadAnalytics();
   if(name==='products') loadProducts(arguments[1]);
   if(name==='orders') loadOrders();
   if(name==='settings') { loadAdmins(); loadScheduleEditor(); }
@@ -1799,6 +1866,102 @@ function printOrder() {
   w.document.close();
   w.focus();
   setTimeout(()=>w.print(), 600);
+}
+
+// ============ ANALYTICS ============
+let _anDays = 7;
+function setAnRange(days) {
+  _anDays = days;
+  document.querySelectorAll('.an-range-btn').forEach(b => b.classList.toggle('active', +b.dataset.days === days));
+  loadAnalytics();
+}
+async function loadAnalytics() {
+  const empty = document.getElementById('anEmpty');
+  const content = document.getElementById('anContent');
+  try {
+    const d = await fetch('/api/analytics?days=' + _anDays).then(r => r.json());
+    if (!d.totals || d.totals.events === 0) {
+      empty.style.display = 'block'; content.style.display = 'none'; return;
+    }
+    empty.style.display = 'none'; content.style.display = 'block';
+
+    const t = d.totals;
+    const card = (label, val, icon, cls) =>
+      `<div class="stat-card ${cls}"><div class="stat-label">${label}<i class="fas ${icon} stat-icon"></i></div><div class="stat-val">${val.toLocaleString('uk-UA')}</div></div>`;
+    document.getElementById('anCards').innerHTML =
+      card('Відвідувачі', t.visitors, 'fa-users', 'stat-blue') +
+      card('Перегляди сторінок', t.pageViews, 'fa-eye', 'stat-green') +
+      card('Перегляди товарів', t.productViews, 'fa-box-open', 'stat-amber') +
+      card('Кліки «Телефон»', t.phoneClicks, 'fa-phone', 'stat-orange') +
+      card('Кліки «Viber»', t.viberClicks, 'fa-comment-dots', 'stat-blue') +
+      card('Замовлення', t.orders, 'fa-clipboard-check', 'stat-red');
+
+    renderAnDaily(d.daily);
+    renderAnFunnel(d.funnel);
+    renderAnDevice(d.device);
+    renderAnTop(d.topProducts);
+  } catch (e) {
+    empty.style.display = 'block'; content.style.display = 'none';
+    empty.innerHTML = '<div style="color:var(--red)">Помилка завантаження статистики</div>';
+  }
+}
+function renderAnDaily(daily) {
+  const el = document.getElementById('anDailyChart');
+  const N = daily.length;
+  const counts = daily.map(x => x.visitors);
+  const maxC = Math.max(...counts, 1);
+  const total = counts.reduce((a, b) => a + b, 0);
+  document.getElementById('anVisitorsTotal').textContent = `${total} відвідувачів за ${_anDays} днів`;
+  const W = 100 / N;
+  const bars = daily.map((x, i) => {
+    const h = Math.round((x.visitors / maxC) * 120);
+    const px = i * W;
+    const lbl = new Date(x.date).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
+    const showLbl = N <= 14 || i % Math.ceil(N / 14) === 0;
+    return `<g>
+      <rect x="${px + W * 0.15}%" y="${130 - h}" width="${W * 0.7}%" height="${h}" rx="3" fill="${x.visitors > 0 ? 'var(--blue)' : 'var(--gray-200)'}" opacity="0.85"/>
+      ${x.visitors > 0 && N <= 31 ? `<text x="${px + W / 2}%" y="${124 - h}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--blue)">${x.visitors}</text>` : ''}
+      ${showLbl ? `<text x="${px + W / 2}%" y="148" text-anchor="middle" font-size="9" fill="var(--gray-500)">${lbl}</text>` : ''}
+    </g>`;
+  }).join('');
+  el.innerHTML = `<svg width="100%" height="155" style="overflow:visible">${bars}</svg>`;
+}
+function renderAnFunnel(funnel) {
+  const el = document.getElementById('anFunnel');
+  const top = funnel[0]?.sessions || 1;
+  el.innerHTML = funnel.map((f, i) => {
+    const pct = top ? Math.round((f.sessions / top) * 100) : 0;
+    const prev = i > 0 ? funnel[i - 1].sessions : f.sessions;
+    const drop = (i > 0 && prev > 0) ? Math.round((1 - f.sessions / prev) * 100) : 0;
+    return `<div class="an-funnel-row">
+      <div class="an-funnel-head"><span>${f.stage}</span><b>${f.sessions} (${pct}%)</b></div>
+      <div class="an-funnel-bar"><div class="an-funnel-fill" style="width:${Math.max(pct, 3)}%">${pct}%</div></div>
+      ${i > 0 && drop > 0 ? `<div class="an-drop"><i class="fas fa-arrow-down"></i> ${drop}% відсіялось на цьому кроці</div>` : ''}
+    </div>`;
+  }).join('');
+}
+function renderAnDevice(device) {
+  const el = document.getElementById('anDevice');
+  const total = (device.mobile || 0) + (device.desktop || 0) || 1;
+  const mPct = Math.round((device.mobile / total) * 100);
+  const dPct = 100 - mPct;
+  el.innerHTML = `
+    <div class="an-dev-row"><div class="lbl"><i class="fas fa-mobile-screen" style="color:var(--green)"></i>Телефон</div>
+      <div class="an-dev-bar"><div class="an-dev-fill" style="width:${mPct}%;background:var(--green)"></div></div>
+      <div style="width:78px;text-align:right;font-weight:700;font-size:13px">${device.mobile} (${mPct}%)</div></div>
+    <div class="an-dev-row"><div class="lbl"><i class="fas fa-desktop" style="color:var(--blue)"></i>ПК</div>
+      <div class="an-dev-bar"><div class="an-dev-fill" style="width:${dPct}%;background:var(--blue)"></div></div>
+      <div style="width:78px;text-align:right;font-weight:700;font-size:13px">${device.desktop} (${dPct}%)</div></div>`;
+}
+function renderAnTop(top) {
+  const el = document.getElementById('anTopProducts');
+  if (!top.length) { el.innerHTML = '<div style="color:var(--gray-400);text-align:center;padding:20px">Ще немає переглядів товарів</div>'; return; }
+  el.innerHTML = top.map((p, i) =>
+    `<div class="an-top-row">
+      <div class="an-top-rank">${i + 1}</div>
+      <div class="an-top-name" title="${(p.name || '').replace(/"/g, '&quot;')}">${p.name || ('#' + p.pid)}</div>
+      <div class="an-top-count">${p.count} <span style="font-weight:400;color:var(--gray-400);font-size:12px">переглядів</span></div>
+    </div>`).join('');
 }
 
 // ============ ORDERS CHART ============

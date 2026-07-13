@@ -16,11 +16,13 @@
     const a = e.target.closest && e.target.closest('a[href^="tel:"], a[href^="viber:"]');
     if (!a) return;
     const href = a.getAttribute('href');
-    gtag('event', href.indexOf('viber') === 0 ? 'viber_click' : 'phone_call_click', {
+    const isViber = href.indexOf('viber') === 0;
+    gtag('event', isViber ? 'viber_click' : 'phone_call_click', {
       link_url: href,
       page_path: location.pathname,
       link_text: (a.textContent || '').trim().substring(0, 50)
     });
+    window.track && window.track(isViber ? 'viber_click' : 'phone_click', {});
   });
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1150,6 +1152,30 @@ const STATUS_MAP = {
 const SITE = 'https://olegavto.com';
 const DEFAULT_DESC = 'Автозапчастини для Renault, Peugeot, Citroën та Fiat в Україні. Нові та б/у деталі. Швидка відправка Новою Поштою.';
 
+// ============ FIRST-PARTY ANALYTICS ============
+function _uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+function _visitorId() {
+  let v = localStorage.getItem('olegauto_vid');
+  if (!v) { v = _uid(); localStorage.setItem('olegauto_vid', v); }
+  return v;
+}
+function _sessionId() {
+  let s = sessionStorage.getItem('olegauto_sid');
+  if (!s) { s = _uid(); sessionStorage.setItem('olegauto_sid', s); }
+  return s;
+}
+function _device() { return window.innerWidth <= 768 ? 'mobile' : 'desktop'; }
+window.track = function(ev, data) {
+  try {
+    const payload = Object.assign({
+      ev, sid: _sessionId(), vid: _visitorId(), device: _device(), path: location.pathname
+    }, data || {});
+    const body = JSON.stringify(payload);
+    if (navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' }));
+    else fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true });
+  } catch (e) {}
+};
+
 function updateMeta({ title, desc, image, url, jsonLd } = {}) {
   document.title = title || 'OlegAvto — Запчастини для французьких авто';
   const setMeta = (sel, val) => { const el = document.querySelector(sel); if(el) el.setAttribute('content', val); };
@@ -1165,6 +1191,8 @@ function updateMeta({ title, desc, image, url, jsonLd } = {}) {
 }
 
 function showPage(name, opts={}, noPush=false) {
+  window.track && track('page_view', { name: name });
+  if(name==='cart' && cart.length) window.track && track('begin_checkout', { value: cart.reduce((s,c)=>s+c.price*c.qty,0) });
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('nav button').forEach(b=>{
@@ -1657,6 +1685,7 @@ async function loadProductDetail(id) {
       bc.innerHTML = `<a onclick="showPage('home')">Головна</a><span class="bc-sep">›</span><a onclick="showPage('catalog')">Каталог</a>${brand?`<span class="bc-sep">›</span><a onclick="showPage('catalog');setTimeout(()=>{document.getElementById('filterBrand').value='${brand}';onFilterBrandChange();},100)">${brand}</a>`:''}<span class="bc-sep">›</span><span>${p.name}</span>`;
     }
     addToRecentlyViewed(p);
+    window.track && track('product_view', { pid: p.id, name: p.name });
     const imgs = p.images && p.images.length ? p.images : (p.image ? [p.image] : []);
     const imgHtml = imgs.length
       ? `<div>
@@ -1815,6 +1844,7 @@ function addToCart(id) {
     else cart.push({id:p.id,name:p.name,price:p.price,image:p.image,category:p.category,brand:p.brand,model:p.model,article:p.article||'',qty:1,stock:p.stock});
     if(idx>=0) cart[idx].stock = p.stock;
     saveCart();
+    window.track && track('add_to_cart', { pid: p.id, name: p.name, value: p.price });
     showToast(`"${p.name}" додано до кошика`,'success');
   });
 }
@@ -1979,6 +2009,7 @@ async function submitOrder() {
     const res = await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!res.ok) throw new Error('server error');
     const order = await res.json();
+    window.track && track('purchase', { value: subtotal, name: '#'+order.id });
     cart = [];
     saveCart();
     showOrderNotification(order.id);
