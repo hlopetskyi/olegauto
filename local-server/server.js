@@ -857,7 +857,8 @@ app.get('/api/analytics', dynamicAdminAuth, (req, res) => {
       prodCounts[k].count++;
     }
   }
-  const topProducts = Object.values(prodCounts).sort((a, b) => b.count - a.count).slice(0, 10);
+  const allViewedProducts = Object.values(prodCounts).sort((a, b) => b.count - a.count);
+  const topProducts = allViewedProducts.slice(0, 10);
 
   // Daily series (visitors = unique vid/day, orders = purchase count/day)
   const daily = [];
@@ -895,6 +896,7 @@ app.get('/api/analytics', dynamicAdminAuth, (req, res) => {
       { stage: 'Оформили замовлення', sessions: sessionsWith('purchase') }
     ],
     topProducts,
+    allViewedProducts,
     daily
   });
 });

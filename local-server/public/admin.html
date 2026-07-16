@@ -48,7 +48,9 @@
   .an-top-row:last-child{border-bottom:none}
   .an-top-rank{width:24px;height:24px;border-radius:6px;background:var(--gray-100);color:var(--gray-700);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .an-top-name{flex:1;font-size:14px;color:var(--gray-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .an-top-count{font-weight:700;color:var(--blue);font-size:14px}
+  .an-top-count{font-weight:700;color:var(--blue);font-size:14px;white-space:nowrap}
+  .an-clickable{cursor:pointer;border-radius:8px;transition:background .12s;padding-left:6px;padding-right:6px}
+  .an-clickable:hover{background:var(--gray-50,#f8fafc)}
   .sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.08)}
   .sidebar-footer a{color:rgba(255,255,255,.4);font-size:13px;text-decoration:none;display:flex;align-items:center;gap:8px}
   .sidebar-footer a:hover{color:#fff}
@@ -337,9 +339,15 @@
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-title"><span><i class="fas fa-fire" style="color:var(--red);margin-right:8px"></i>Найпопулярніші товари</span></div>
-        <div id="anTopProducts"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="card">
+          <div class="card-title"><span><i class="fas fa-fire" style="color:var(--red);margin-right:8px"></i>Найпопулярніші товари</span></div>
+          <div id="anTopProducts"></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span><i class="fas fa-list" style="color:var(--blue);margin-right:8px"></i>Усі переглянуті товари</span><span id="anAllCount" style="font-size:13px;font-weight:400;color:var(--gray-500)"></span></div>
+          <div id="anAllProducts" style="max-height:420px;overflow-y:auto"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1900,6 +1908,7 @@ async function loadAnalytics() {
     renderAnFunnel(d.funnel);
     renderAnDevice(d.device);
     renderAnTop(d.topProducts);
+    renderAnAll(d.allViewedProducts || []);
   } catch (e) {
     empty.style.display = 'block'; content.style.display = 'none';
     empty.innerHTML = '<div style="color:var(--red)">Помилка завантаження статистики</div>';
@@ -1957,12 +1966,23 @@ function renderAnTop(top) {
   const el = document.getElementById('anTopProducts');
   if (!top.length) { el.innerHTML = '<div style="color:var(--gray-400);text-align:center;padding:20px">Ще немає переглядів товарів</div>'; return; }
   el.innerHTML = top.map((p, i) =>
-    `<div class="an-top-row">
+    `<div class="an-top-row an-clickable" onclick="openProductPreview(${p.pid})" title="Відкрити оголошення">
       <div class="an-top-rank">${i + 1}</div>
-      <div class="an-top-name" title="${(p.name || '').replace(/"/g, '&quot;')}">${p.name || ('#' + p.pid)}</div>
+      <div class="an-top-name">${p.name || ('#' + p.pid)}</div>
       <div class="an-top-count">${p.count} <span style="font-weight:400;color:var(--gray-400);font-size:12px">переглядів</span></div>
     </div>`).join('');
 }
+function renderAnAll(all) {
+  const el = document.getElementById('anAllProducts');
+  document.getElementById('anAllCount').textContent = all.length ? `${all.length} товар${pluralUaAdmin(all.length)}` : '';
+  if (!all.length) { el.innerHTML = '<div style="color:var(--gray-400);text-align:center;padding:20px">Ще немає переглядів товарів</div>'; return; }
+  el.innerHTML = all.map((p) =>
+    `<div class="an-top-row an-clickable" onclick="openProductPreview(${p.pid})" title="Відкрити оголошення">
+      <div class="an-top-name">${p.name || ('#' + p.pid)}</div>
+      <div class="an-top-count">${p.count}</div>
+    </div>`).join('');
+}
+function pluralUaAdmin(n){ if(n%10===1&&n%100!==11)return ''; if(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))return 'и'; return 'ів'; }
 
 // ============ ORDERS CHART ============
 function renderOrdersChart(orders) {
