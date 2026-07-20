@@ -699,6 +699,26 @@ app.patch('/api/settings', dynamicAdminAuth, (req, res) => {
   res.json(updated);
 });
 
+// ============ CAR CATALOG (makes/models/years/engines) ============
+const CAR_CATALOG_FILE = path.join(__dirname, 'data', 'car-catalog.json');
+function loadCarCatalog() {
+  try { return JSON.parse(fs.readFileSync(CAR_CATALOG_FILE, 'utf8')); } catch { return { models: {}, years: {}, engines: {} }; }
+}
+app.get('/api/car-catalog', (req, res) => res.json(loadCarCatalog()));
+app.put('/api/car-catalog', dynamicAdminAuth, (req, res) => {
+  const cat = req.body;
+  if (!cat || typeof cat !== 'object' || typeof cat.models !== 'object' || typeof cat.years !== 'object' || typeof cat.engines !== 'object') {
+    return res.status(400).json({ error: 'Некоректний формат каталогу' });
+  }
+  for (const [brand, models] of Object.entries(cat.models)) {
+    if (!Array.isArray(models) || !brand.trim()) return res.status(400).json({ error: 'Некоректний формат каталогу' });
+  }
+  // safety backup before overwrite
+  try { fs.copyFileSync(CAR_CATALOG_FILE, CAR_CATALOG_FILE + '.bak'); } catch {}
+  fs.writeFileSync(CAR_CATALOG_FILE, JSON.stringify(cat, null, 2));
+  res.json({ ok: true });
+});
+
 // ============ NOVA POSHTA PROXY ============
 const NP_API_KEY = process.env.NP_API_KEY || '';
 const NP_URL = 'https://api.novaposhta.ua/v2.0/json/';
