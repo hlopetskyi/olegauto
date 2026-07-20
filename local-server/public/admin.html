@@ -708,7 +708,6 @@
   <div class="section" id="section-carCatalog">
     <div class="page-header">
       <div class="page-title">Марки та моделі</div>
-      <button class="btn-primary btn-sm" onclick="catSave()"><i class="fas fa-save"></i> Зберегти зміни</button>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -723,11 +722,12 @@
       </div>
     </div>
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div style="font-weight:700;font-size:15px" id="catModelsTitle">Моделі</div>
-        <button class="btn-primary btn-sm" onclick="catAddModel()"><i class="fas fa-plus"></i> Додати модель</button>
-      </div>
+      <div style="font-weight:700;font-size:15px;margin-bottom:14px" id="catModelsTitle">Моделі</div>
       <div id="catModelsList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+        <button class="btn-primary btn-sm" onclick="catAddModel()"><i class="fas fa-plus"></i> Додати модель</button>
+        <button class="btn-primary btn-sm" onclick="catSave()"><i class="fas fa-save"></i> Зберегти зміни</button>
+      </div>
     </div>
   </div>
 
