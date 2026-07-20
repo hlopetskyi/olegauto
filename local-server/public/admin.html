@@ -1063,6 +1063,8 @@ function catRenderModels() {
         <input class="cat-name" value="${esc(m)}" placeholder="Модель" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;outline:none">
         <input class="cat-years" value="${esc(yr)}" placeholder="1996–2008" style="width:120px;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;outline:none">
         <button type="button" onclick="catToggleEngines(this)" style="background:var(--gray-100);border:none;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;color:var(--gray-600)"><i class="fas fa-cogs"></i> Двигуни (${engCount})</button>
+        <button type="button" onclick="catMoveModel(${i},-1)" ${i===0?'disabled':''} title="Вгору" style="background:var(--gray-100);border:none;border-radius:8px;padding:8px 10px;cursor:pointer;color:var(--gray-600);${i===0?'opacity:.35;cursor:default;':''}"><i class="fas fa-arrow-up"></i></button>
+        <button type="button" onclick="catMoveModel(${i},1)" ${i===models.length-1?'disabled':''} title="Вниз" style="background:var(--gray-100);border:none;border-radius:8px;padding:8px 10px;cursor:pointer;color:var(--gray-600);${i===models.length-1?'opacity:.35;cursor:default;':''}"><i class="fas fa-arrow-down"></i></button>
         <button type="button" onclick="catDeleteModel(${i})" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:8px;padding:8px 10px;cursor:pointer"><i class="fas fa-trash"></i></button>
       </div>
       <textarea class="cat-engines" placeholder="1.6 HDi 90hp (DV6TED4)&#10;1.9 D 70hp (DW8)" style="display:none;width:100%;margin-top:8px;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:12px;font-family:monospace;outline:none;min-height:80px">${esc(eng)}</textarea>
@@ -1124,6 +1126,17 @@ function catAddModel() {
   const rows = document.querySelectorAll('#catModelsList .cat-row');
   const last = rows[rows.length-1];
   if (last) { last.scrollIntoView({behavior:'smooth', block:'center'}); last.querySelector('.cat-name').focus(); }
+}
+
+function catMoveModel(idx, dir) {
+  catSyncCurrent();
+  const models = catState.models[catBrand];
+  const j = idx + dir;
+  if (j < 0 || j >= models.length) return;
+  [models[idx], models[j]] = [models[j], models[idx]];
+  catRenderModels();
+  const row = document.querySelectorAll('#catModelsList .cat-row')[j];
+  if (row) row.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 function catDeleteModel(idx) {
