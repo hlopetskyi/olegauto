@@ -223,6 +223,24 @@
   .brand-peugeot{color:#002395}
   .brand-citroen{color:#c8102e}
   .brand-fiat{color:#8b0000}
+  /* home category pills */
+  .home-cats{display:flex;flex-wrap:wrap;gap:9px}
+  .home-cat{background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:22px;padding:9px 17px;font-size:14px;font-weight:600;color:var(--gray-700);cursor:pointer;transition:all .15s}
+  .home-cat:hover{border-color:var(--blue);background:#fff;color:var(--blue)}
+  /* home brand catalog with model chips */
+  .cat-brands{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .cat-brand{border:1.5px solid var(--gray-200);border-radius:var(--radius);padding:16px 18px;transition:border-color .15s}
+  .cat-brand:hover{border-color:var(--blue)}
+  .cat-brand-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .cat-brand-head img{width:38px;height:38px;object-fit:contain}
+  .cat-brand-name{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;text-transform:uppercase;color:var(--blue);cursor:pointer}
+  .cat-brand-name:hover{color:var(--orange)}
+  .cat-brand-count{margin-left:auto;font-size:12px;color:var(--gray-500)}
+  .cat-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .cat-chip{background:var(--gray-100);border:none;border-radius:16px;padding:5px 12px;font-size:13px;color:var(--gray-900);cursor:pointer;transition:all .12s}
+  .cat-chip:hover{background:var(--blue);color:#fff}
+  .cat-chip.more{background:#fff;border:1.5px dashed var(--gray-300);color:var(--gray-500)}
+  @media(max-width:640px){ .cat-brands{grid-template-columns:1fr} }
 
   /* PRODUCT GRID */
   .product-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
@@ -748,40 +766,22 @@
     </div>
   </div>
 
-  <!-- BRANDS SECTION -->
+  <!-- CATEGORIES -->
   <div class="section" style="padding-bottom:20px">
     <div class="section-inner">
-      <h2 class="section-title">Бренди</h2>
-      <p class="section-sub">Запчастини для європейських автомобілів</p>
-      <div class="brand-cards">
-        <div class="brand-card" onclick="filterByBrand('Renault')">
-          <div class="brand-icon">
-            <img src="/renault-removebg-preview.png" alt="Renault" style="width:48px;height:48px;object-fit:contain;display:block">
-          </div>
-          <div>Renault</div>
-          <div style="font-size:12px;color:var(--gray-500);font-weight:400;margin-top:4px">Clio, Megane, Kangoo...</div>
-        </div>
-        <div class="brand-card" onclick="filterByBrand('Peugeot')">
-          <div class="brand-icon">
-            <img src="/peugeot.png" alt="Peugeot" style="width:48px;height:48px;object-fit:contain;display:block">
-          </div>
-          <div>Peugeot</div>
-          <div style="font-size:12px;color:var(--gray-500);font-weight:400;margin-top:4px">207, 208, 308, Partner...</div>
-        </div>
-        <div class="brand-card" onclick="filterByBrand('Citroën')">
-          <div class="brand-icon">
-            <img src="/citroen.png" alt="Citroën" style="width:48px;height:48px;object-fit:contain;display:block">
-          </div>
-          <div>Citroën</div>
-          <div style="font-size:12px;color:var(--gray-500);font-weight:400;margin-top:4px">C3, C4, Berlingo, Jumper...</div>
-        </div>
-        <div class="brand-card" onclick="filterByBrand('Fiat')">
-          <div class="brand-icon">
-            <img src="/fiat.png" alt="Fiat" style="width:48px;height:48px;object-fit:contain;display:block">
-          </div>
-          <div>Fiat</div>
-          <div style="font-size:12px;color:var(--gray-500);font-weight:400;margin-top:4px">Ducato, Doblo, Punto...</div>
-        </div>
+      <h2 class="section-title">Категорії</h2>
+      <p class="section-sub">Оберіть розділ запчастин</p>
+      <div class="home-cats" id="homeCats"></div>
+    </div>
+  </div>
+
+  <!-- BRANDS CATALOG (with model chips) -->
+  <div class="section" style="padding-bottom:20px">
+    <div class="section-inner">
+      <h2 class="section-title">Каталог за марками</h2>
+      <p class="section-sub">Оберіть модель — покажемо всі запчастини для неї</p>
+      <div class="cat-brands" id="homeBrandCatalog">
+        <div class="loading"><div class="spinner"></div><span>Завантаження...</span></div>
       </div>
     </div>
   </div>
@@ -1029,7 +1029,47 @@ let CAR_ENGINES = {};
     CAR_MODEL_YEARS = cat.years || {};
     CAR_ENGINES = cat.engines || {};
   } catch (e) { console.error('car-catalog load failed', e); }
+  renderHomeBrandCatalog();
 })();
+
+// ---- Home: categories + brand catalog with model chips ----
+const HOME_LOGOS = {'Renault':'/renault-removebg-preview.png','Peugeot':'/peugeot.png','Citroën':'/citroen.png','Fiat':'/fiat.png'};
+const HOME_CATEGORIES = ['Кузов','Двигун та КПП','Електрика','Паливна система','Охолодження','Освітлення','Підвіска','Гальма','Трансмісія'];
+const HOME_CHIP_LIMIT = 12;
+function htmlEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+function renderHomeCategories(){
+  const el = document.getElementById('homeCats');
+  if(!el) return;
+  el.innerHTML = HOME_CATEGORIES.map(c=>`<button class="home-cat" onclick="filterByCategory('${htmlEsc(c)}')">${htmlEsc(c)}</button>`).join('');
+}
+function renderHomeBrandCatalog(){
+  const el = document.getElementById('homeBrandCatalog');
+  if(!el) return;
+  const brands = Object.keys(CAR_MODELS);
+  if(!brands.length){ el.innerHTML = ''; return; }
+  el.innerHTML = brands.map(b=>{
+    const logo = HOME_LOGOS[b] ? `<img src="${HOME_LOGOS[b]}" alt="${htmlEsc(b)}">` : '';
+    const all = CAR_MODELS[b] || [];
+    const chips = all.slice(0,HOME_CHIP_LIMIT).map(m=>`<button class="cat-chip" onclick="filterByModel('${htmlEsc(b)}','${htmlEsc(m)}')">${htmlEsc(m)}</button>`).join('');
+    const more = all.length>HOME_CHIP_LIMIT ? `<button class="cat-chip more" onclick="filterByBrand('${htmlEsc(b)}')">+ ще ${all.length-HOME_CHIP_LIMIT}</button>` : '';
+    return `<div class="cat-brand">
+      <div class="cat-brand-head">${logo}<div class="cat-brand-name" onclick="filterByBrand('${htmlEsc(b)}')">${htmlEsc(b)}</div><div class="cat-brand-count">${all.length} моделей</div></div>
+      <div class="cat-chips">${chips}${more}</div>
+    </div>`;
+  }).join('');
+}
+function filterByModel(brand, model){
+  catalogCarBrand = brand;
+  catalogCarModel = model;
+  showPage('catalog',{carBrand:brand, carModel:model});
+}
+function filterByCategory(cat){
+  showPage('catalog');
+  const sel = document.getElementById('filterCategory');
+  if(sel){ sel.value = cat; }
+  applyFilters();
+}
 
 const COND_LABELS = {new:'Новий',used:'Б/У',refurbished:'Відновлений'};
 const COND_BADGE = {new:'badge-new',used:'badge-used',refurbished:'badge-refurbished'};
@@ -1171,6 +1211,8 @@ window.addEventListener('load', () => {
   updateCartBadge();
   initScheduleBar();
   hdrScheduleStatus();
+  renderHomeCategories();
+  renderHomeBrandCatalog();
   handlePath();
   loadCurrencyRates();
 });
