@@ -123,6 +123,64 @@
   .cart-btn:hover{background:var(--orange-dark)}
   .cart-badge{background:#fff;color:var(--orange);border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;min-width:18px}
 
+  /* ===== NEW HEADER (buscentr-style) ===== */
+  .hdr-wrap{max-width:1280px;margin:0 auto;padding:0 20px}
+  .hdr-top{display:grid;grid-template-columns:auto 1fr auto auto;gap:26px;align-items:center;padding:13px 0}
+  .hh-logo{display:flex;align-items:center;gap:11px;cursor:pointer}
+  .hh-mark{width:46px;height:46px;border-radius:11px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:21px;font-family:'Montserrat',sans-serif}
+  .hh-logo-txt b{font-family:'Montserrat',sans-serif;font-size:23px;font-weight:800;line-height:1;color:var(--gray-900)}
+  .hh-logo-txt b span{color:var(--orange)}
+  .hh-logo-txt small{display:block;font-size:10px;letter-spacing:1.8px;color:var(--gray-500);text-transform:uppercase;margin-top:3px}
+  .hh-phones{display:flex;flex-direction:column;gap:5px}
+  .hh-ph{display:flex;align-items:center;gap:9px;text-decoration:none}
+  .hh-name{min-width:58px;font-size:12.5px;font-weight:700;color:var(--gray-500);flex-shrink:0}
+  .hh-num{font-size:15px;font-weight:800;color:var(--gray-900)}
+  .hh-ph:hover .hh-num{color:var(--blue)}
+  .hh-tag{font-size:11px;color:var(--gray-500)}
+  .hh-contacts{display:flex;flex-direction:column;gap:6px;font-size:13px}
+  .hh-ct{display:flex;align-items:center;gap:8px;color:var(--gray-700);text-decoration:none}
+  .hh-ct:hover{color:var(--blue)}
+  .hh-ic{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;flex-shrink:0}
+  .hh-ic.mail{background:var(--gray-500)}.hh-ic.viber{background:#7360f2}
+  .hh-side{display:flex;flex-direction:column;gap:8px;min-width:196px}
+  .hh-sched{font-size:12.5px;line-height:1.5}
+  .hh-status{display:flex;align-items:center;gap:7px;font-weight:700;margin-bottom:4px}
+  .hh-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--gray-300)}
+  .hh-dot.open{background:var(--green)}.hh-dot.closed{background:var(--red)}
+  .hh-srow{display:flex;justify-content:space-between;color:var(--gray-500)}
+  .hh-srow b{color:var(--gray-900);font-weight:600}
+  .hh-rates.currency-widget{flex-direction:row;gap:14px;border-top:1px solid var(--gray-200);padding-top:7px;min-width:0}
+  .hdr-bot{border-top:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;padding:9px 0;gap:16px}
+  .hh-nav{display:flex;gap:6px;margin-left:0}
+  .hh-nav button{background:none;border:none;padding:8px 14px;font-size:14px;color:var(--gray-700);border-radius:7px;font-weight:600;transition:all .2s}
+  .hh-nav button:hover{background:var(--gray-100);color:var(--blue)}
+  .hh-nav button.active{color:var(--blue);background:rgba(0,35,149,.08)}
+  .hh-bot-right{display:flex;align-items:center;gap:12px}
+  .hh-search{position:relative;width:340px}
+  .hh-search input{width:100%;padding:9px 40px 9px 14px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;outline:none;transition:border .2s}
+  .hh-search input:focus{border-color:var(--blue)}
+  .hh-search button{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--gray-500);font-size:16px}
+  .hh-cart{position:relative;background:var(--orange);border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;transition:background .2s;white-space:nowrap}
+  .hh-cart:hover{background:var(--orange-dark)}
+  @media(max-width:1024px){
+    .hdr-top{grid-template-columns:auto 1fr auto;gap:16px}
+    .hh-contacts{display:none}
+    .hh-search{width:220px}
+  }
+  @media(max-width:768px){
+    .hdr-top{grid-template-columns:auto 1fr;gap:14px}
+    .hh-side{display:none}
+  }
+  @media(max-width:640px){
+    .hh-phones{display:none}
+    .hdr-bot{flex-wrap:wrap}
+    .hh-nav{order:2;width:100%;justify-content:space-around;gap:2px}
+    .hh-search{order:1;flex:1;width:auto}
+    .hh-cart{order:1}
+  }
+  /* графік у хедері вже показує розклад на десктопі — ховаємо дубль-смугу */
+  @media(min-width:769px){ #scheduleBar{display:none!important} }
+
   /* PAGES */
   .page{display:none}
   .page.active{display:block}
@@ -491,27 +549,51 @@
 
 <!-- HEADER -->
 <header>
-  <div class="header-inner">
-    <div class="logo" onclick="showPage('home')" style="cursor:pointer">
-      <div class="logo-title">OlegAvto</div>
-      <div class="logo-sub">Запчастини для французьких авто</div>
+  <div class="hdr-wrap">
+    <div class="hdr-top">
+      <div class="hh-logo" onclick="showPage('home')">
+        <div class="hh-mark">O</div>
+        <div class="hh-logo-txt"><b>Oleg<span>Avto</span></b><small>Автозапчастини</small></div>
+      </div>
+
+      <div class="hh-phones">
+        <a class="hh-ph" href="tel:+380677448965"><span class="hh-name">Андрій</span><span class="hh-num">(067) 744-89-65</span><span class="hh-tag">· Viber</span></a>
+        <a class="hh-ph" href="tel:+380677533189"><span class="hh-name">Михайло</span><span class="hh-num">(067) 753-31-89</span></a>
+      </div>
+
+      <div class="hh-contacts">
+        <a class="hh-ct" href="mailto:franskomarno@gmail.com"><span class="hh-ic mail">@</span>franskomarno@gmail.com</a>
+        <a class="hh-ct" href="viber://chat?number=%2B380677448965"><span class="hh-ic viber">V</span>Viber · (067) 744-89-65</a>
+      </div>
+
+      <div class="hh-side">
+        <div class="hh-sched">
+          <div class="hh-status"><span class="hh-dot" id="hdrSchedDot"></span><span id="hdrSchedStatus">Графік роботи</span></div>
+          <div class="hh-srow"><span>Пн–Пт</span><b>9:00–18:00</b></div>
+          <div class="hh-srow"><span>Субота</span><b>9:00–14:00</b></div>
+          <div class="hh-srow"><span>Неділя</span><b>вихідний</b></div>
+        </div>
+        <div class="currency-widget hh-rates" id="currencyWidget"></div>
+      </div>
     </div>
-    <a href="tel:+380677448965" class="header-phone"><i class="fas fa-phone"></i> +38 067 744 8965</a>
-    <div class="header-search">
-      <input type="text" id="headerSearch" placeholder="Пошук: назва, OEM, артикул..." onkeydown="if(event.key==='Enter')doSearch()">
-      <button onclick="doSearch()"><i class="fas fa-search"></i></button>
+
+    <div class="hdr-bot">
+      <nav class="hh-nav">
+        <button onclick="showPage('home')" id="nav-home" class="active">Головна</button>
+        <button onclick="showPage('catalog')" id="nav-catalog">Каталог</button>
+        <button onclick="showPage('contacts')" id="nav-contacts">Контакти</button>
+      </nav>
+      <div class="hh-bot-right">
+        <div class="hh-search">
+          <input type="text" id="headerSearch" placeholder="Пошук: назва, OEM, артикул..." onkeydown="if(event.key==='Enter')doSearch()">
+          <button onclick="doSearch()"><i class="fas fa-search"></i></button>
+        </div>
+        <button class="hh-cart" onclick="showPage('cart')">
+          <i class="fas fa-shopping-cart"></i> Кошик
+          <span class="cart-badge" id="cartBadge">0</span>
+        </button>
+      </div>
     </div>
-    <nav>
-      <button onclick="showPage('home')" id="nav-home" class="active">Головна</button>
-      <button onclick="showPage('catalog')" id="nav-catalog">Каталог</button>
-      <button onclick="showPage('contacts')" id="nav-contacts">Контакти</button>
-    </nav>
-    <div class="currency-widget" id="currencyWidget"></div>
-    <button class="cart-btn" onclick="showPage('cart')">
-      <i class="fas fa-shopping-cart"></i>
-      Кошик
-      <span class="cart-badge" id="cartBadge">0</span>
-    </button>
   </div>
 </header>
 
@@ -1088,9 +1170,32 @@ window.addEventListener('popstate', e => {
 window.addEventListener('load', () => {
   updateCartBadge();
   initScheduleBar();
+  hdrScheduleStatus();
   handlePath();
   loadCurrencyRates();
 });
+
+// Живий статус графіка в хедері (відчинено/зачинено). Дані з /api/settings,
+// падає назад на статичні години, що відповідають settings.json.
+async function hdrScheduleStatus() {
+  const dot = document.getElementById('hdrSchedDot');
+  const st = document.getElementById('hdrSchedStatus');
+  if (!dot || !st) return;
+  const STATIC = {0:null,1:[540,1080],2:[540,1080],3:[540,1080],4:[540,1080],5:[540,1080],6:[540,840]};
+  let win;
+  try {
+    if(!_cachedSchedule) _cachedSchedule = await api('/api/settings');
+    const sc = _cachedSchedule.schedule || {};
+    const d = sc[DAYS_BY_JS[new Date().getDay()]];
+    win = (d && !d.closed) ? [toMin(d.open), toMin(d.close)] : null;
+  } catch(e) { win = STATIC[new Date().getDay()]; }
+  const mins = new Date().getHours()*60 + new Date().getMinutes();
+  const open = win && mins >= win[0] && mins < win[1];
+  dot.className = 'hh-dot ' + (open ? 'open' : 'closed');
+  st.textContent = open ? 'Зараз відчинено' : 'Зараз зачинено';
+  st.style.color = open ? 'var(--green)' : 'var(--red)';
+}
+function toMin(hhmm){ const [h,m]=(hhmm||'0:0').split(':').map(Number); return h*60+(m||0); }
 
 document.addEventListener('input', e => {
   if (e.target.id === 'oPhone') {
