@@ -193,6 +193,24 @@
   .hero p{font-size:17px;opacity:.9;line-height:1.6;margin-bottom:28px}
   .hero-tags{display:flex;flex-wrap:wrap;gap:10px}
   .hero-tag{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);padding:6px 14px;border-radius:20px;font-size:13px;font-weight:500}
+  /* horizontal search hero (buscentr-style) */
+  .hero-inner2{max-width:1280px;margin:0 auto}
+  .hero-eyebrow{font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;opacity:.7;margin-bottom:10px}
+  .hero-inner2 h1{font-family:'Montserrat',sans-serif;font-size:32px;font-weight:800;line-height:1.15;margin-bottom:6px}
+  .hero-inner2 h1 span{color:var(--orange)}
+  .hero-lead{font-size:16px;opacity:.9;margin-bottom:22px}
+  .hsp{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:16px;padding:16px}
+  .hsp-grid{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px}
+  .hsp select,.hsp input{width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-family:'Inter',sans-serif;background:#fff;outline:none;color:var(--gray-900)}
+  .hsp select:disabled{color:var(--gray-500);background:#eef1f6}
+  .hsp-find{padding:14px 28px;border:none;border-radius:10px;background:var(--orange);color:#fff;font-size:16px;font-weight:700;white-space:nowrap;transition:background .2s}
+  .hsp-find:hover{background:var(--orange-dark)}
+  .hsp-oe{margin-top:10px;display:flex;gap:10px}
+  .hsp-oe input{flex:1}
+  .hsp-oe button{padding:0 22px;border:none;border-radius:10px;background:rgba(255,255,255,.16);color:#fff;font-weight:600;font-size:14.5px;transition:background .2s}
+  .hsp-oe button:hover{background:rgba(255,255,255,.28)}
+  @media(max-width:768px){ .hsp-grid{grid-template-columns:1fr 1fr} .hsp-grid .hsp-find{grid-column:1/-1} }
+  @media(max-width:480px){ .hsp-grid{grid-template-columns:1fr} }
 
   /* VEHICLE FINDER CARD */
   .finder-card{background:#fff;border-radius:16px;padding:28px;box-shadow:var(--shadow-lg)}
@@ -695,59 +713,38 @@
 <div class="page active" id="page-home">
   <!-- HERO -->
   <div class="hero">
-    <div class="hero-inner">
-      <div>
-        <p style="font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;opacity:.7;margin-bottom:10px">Автозапчастини України</p>
-        <h1>Запчастини для <span>Renault, Peugeot,</span> Citroën та Fiat</h1>
-        <p>Нові та б/у деталі для французьких автомобілів. Швидка відправка по всій Україні. Консультація спеціаліста.</p>
-        <div class="hero-tags">
-          <span class="hero-tag"><i class="fas fa-check"></i> Тільки французькі авто</span>
-          <span class="hero-tag"><i class="fas fa-truck"></i> Нова Пошта</span>
-          <span class="hero-tag"><i class="fas fa-headset"></i> Консультація</span>
+    <div class="hero-inner2">
+      <p class="hero-eyebrow">Автозапчастини України</p>
+      <h1>Запчастини для <span>французьких авто</span></h1>
+      <p class="hero-lead">Renault · Peugeot · Citroën · Fiat — нові та б/в, з відправкою по всій Україні</p>
+      <div class="hsp">
+        <div class="hsp-grid">
+          <select id="finderBrand" onchange="updateFinderModels()">
+            <option value="">Всі марки</option>
+            <option value="Renault">Renault</option>
+            <option value="Peugeot">Peugeot</option>
+            <option value="Citroën">Citroën</option>
+            <option value="Fiat">Fiat</option>
+            <option value="Opel">Opel</option>
+            <option value="Ford">Ford</option>
+            <option value="Nissan">Nissan</option>
+            <option value="Mercedes">Mercedes</option>
+            <option value="Volvo">Volvo</option>
+            <option value="Alfa Romeo">Alfa Romeo</option>
+            <option value="Lancia">Lancia</option>
+            <option value="Mazda">Mazda</option>
+          </select>
+          <select id="finderModel" onchange="updateFinderEngines()">
+            <option value="">Всі моделі</option>
+          </select>
+          <select id="finderEngine" disabled>
+            <option value="">Всі двигуни</option>
+          </select>
+          <button class="hsp-find" onclick="findParts()"><i class="fas fa-search"></i> Знайти</button>
         </div>
-      </div>
-      <div>
-        <div class="finder-card">
-          <h3><i class="fas fa-car" style="color:var(--orange)"></i> Знайти запчастини</h3>
-          <div class="finder-field">
-            <label>Марка автомобіля</label>
-            <select id="finderBrand" onchange="updateFinderModels()">
-              <option value="">— оберіть марку —</option>
-              <option value="Renault">Renault</option>
-              <option value="Peugeot">Peugeot</option>
-              <option value="Citroën">Citroën</option>
-              <option value="Fiat">Fiat</option>
-              <option value="Opel">Opel</option>
-              <option value="Ford">Ford</option>
-              <option value="Nissan">Nissan</option>
-              <option value="Mercedes">Mercedes</option>
-              <option value="Volvo">Volvo</option>
-              <option value="Alfa Romeo">Alfa Romeo</option>
-              <option value="Lancia">Lancia</option>
-              <option value="Mazda">Mazda</option>
-            </select>
-          </div>
-          <div class="finder-field">
-            <label>Модель</label>
-            <select id="finderModel" onchange="updateFinderEngines()">
-              <option value="">— спочатку оберіть марку —</option>
-            </select>
-          </div>
-          <div class="finder-field">
-            <label>Двигун</label>
-            <select id="finderEngine" disabled>
-              <option value="">— всі двигуни —</option>
-            </select>
-          </div>
-          <div class="finder-field">
-            <label>Стан</label>
-            <div class="condition-pills">
-              <button class="cpill active" data-val="" onclick="selectPill(this)">Всі</button>
-              <button class="cpill" data-val="new" onclick="selectPill(this)">Нові</button>
-              <button class="cpill" data-val="used" onclick="selectPill(this)">Б/У</button>
-            </div>
-          </div>
-          <button class="btn-find" onclick="findParts()"><i class="fas fa-search"></i> Знайти запчастини</button>
+        <div class="hsp-oe">
+          <input type="text" id="heroSearch" placeholder="Або введіть назву запчастини чи OE номер..." onkeydown="if(event.key==='Enter')heroSearch()">
+          <button onclick="heroSearch()">Пошук</button>
         </div>
       </div>
     </div>
@@ -1375,12 +1372,21 @@ function selectPill(btn) {
   btn.classList.add('active');
 }
 
+function heroSearch() {
+  const raw = document.getElementById('heroSearch').value.trim();
+  if(!raw) return;
+  const hs = document.getElementById('headerSearch');
+  if(hs) hs.value = raw;
+  doSearch();
+}
+
 function findParts() {
   const carBrand = document.getElementById('finderBrand').value;
   const carModel = document.getElementById('finderModel').value;
   const engineSel = document.getElementById('finderEngine');
   const carEngine = engineSel ? engineSel.value : '';
-  const condition = document.querySelector('.condition-pills .cpill.active').dataset.val;
+  const pill = document.querySelector('.condition-pills .cpill.active');
+  const condition = pill ? pill.dataset.val : '';
   prevPage = 'home';
   if(condition) setCondFilterVal(condition);
   catalogCarEngine = carEngine;
