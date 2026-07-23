@@ -620,10 +620,8 @@
         <button onclick="showPage('contacts')" id="nav-contacts">Контакти</button>
       </nav>
       <div class="hh-bot-right">
-        <div class="hh-search">
-          <input type="text" id="headerSearch" placeholder="Пошук: назва, OEM, артикул..." onkeydown="if(event.key==='Enter')doSearch()">
-          <button onclick="doSearch()"><i class="fas fa-search"></i></button>
-        </div>
+        <!-- прихований інпут: пошук веде hero-рядок; тут лишений для логіки фільтрів -->
+        <input type="hidden" id="headerSearch">
         <button class="hh-cart" onclick="showPage('cart')">
           <i class="fas fa-shopping-cart"></i> Кошик
           <span class="cart-badge" id="cartBadge">0</span>
