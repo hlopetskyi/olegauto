@@ -1,4 +1,4 @@
-const CACHE = 'olegauto-v1';
+const CACHE = 'olegauto-v2';
 const PRECACHE = ['/', '/manifest.json', '/favicon.svg'];
 
 self.addEventListener('install', e => {
@@ -14,7 +14,12 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if(e.request.method !== 'GET') return;
-  if(e.request.url.includes('/api/')) return;
+  const url = new URL(e.request.url);
+  // Не перехоплювати запити до API та адмін-панелі: /admin під HTTP Basic Auth,
+  // а перехоплення навігації service worker'ом ламає діалог логіна (сторінка
+  // циклічно перезавантажується). Хай браузер обробляє їх напряму.
+  if(url.pathname.startsWith('/api/')) return;
+  if(url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return;
   e.respondWith(
     fetch(e.request).catch(() => caches.match(e.request))
   );
