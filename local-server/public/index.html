@@ -748,19 +748,6 @@
     </div>
   </div>
 
-  <!-- RECENTLY VIEWED -->
-  <div class="section" id="recentSection" style="display:none">
-    <div class="section-inner">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div>
-          <h2 class="section-title" style="margin-bottom:2px">Нещодавно переглянуті</h2>
-        </div>
-        <button onclick="clearRecentlyViewed()" style="background:none;border:none;color:var(--gray-400);font-size:12px;cursor:pointer;padding:4px 0">Очистити</button>
-      </div>
-      <div class="recent-scroll" id="recentScroll"></div>
-    </div>
-  </div>
-
   <!-- BRANDS CATALOG (with model chips) -->
   <div class="section" style="padding-bottom:20px">
     <div class="section-inner">
@@ -769,6 +756,19 @@
       <div class="cat-brands" id="homeBrandCatalog">
         <div class="loading"><div class="spinner"></div><span>Завантаження...</span></div>
       </div>
+    </div>
+  </div>
+
+  <!-- RECENTLY VIEWED -->
+  <div class="section" id="recentSection" style="display:none;padding-top:20px">
+    <div class="section-inner">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <h2 class="section-title" style="margin-bottom:2px">Нещодавно переглянуті</h2>
+        </div>
+        <button onclick="clearRecentlyViewed()" style="background:none;border:none;color:var(--gray-400);font-size:12px;cursor:pointer;padding:4px 0">Очистити</button>
+      </div>
+      <div class="recent-scroll" id="recentScroll"></div>
     </div>
   </div>
 
