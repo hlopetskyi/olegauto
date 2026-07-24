@@ -1007,6 +1007,7 @@ let CAR_MODELS = {};
 let CAR_MODEL_YEARS = {};
 let CAR_ENGINES = {};
 
+let AVAILABLE_MODELS = null; // Set of "brand||model" (lowercase) — моделі з товарами
 (async function loadCarCatalog() {
   try {
     const r = await fetch('/api/car-catalog');
@@ -1015,6 +1016,10 @@ let CAR_ENGINES = {};
     CAR_MODEL_YEARS = cat.years || {};
     CAR_ENGINES = cat.engines || {};
   } catch (e) { console.error('car-catalog load failed', e); }
+  try {
+    const pairs = await (await fetch('/api/catalog-models')).json();
+    AVAILABLE_MODELS = new Set(pairs);
+  } catch (e) { AVAILABLE_MODELS = null; }
   renderHomeBrandCatalog();
 })();
 
@@ -1034,9 +1039,12 @@ function renderHomeBrandCatalog(){
   if(!el) return;
   const brands = Object.keys(CAR_MODELS);
   if(!brands.length){ el.innerHTML = ''; return; }
-  el.innerHTML = brands.map(b=>{
+  const hasParts = (b,m) => !AVAILABLE_MODELS || AVAILABLE_MODELS.has((b+'||'+m).toLowerCase());
+  const cards = brands.map(b=>{
     const logo = HOME_LOGOS[b] ? `<img src="${HOME_LOGOS[b]}" alt="${htmlEsc(b)}">` : '';
-    const all = CAR_MODELS[b] || [];
+    // лише моделі, для яких є хоч одна запчастина
+    const all = (CAR_MODELS[b] || []).filter(m => hasParts(b,m));
+    if(!all.length) return ''; // марку без товарів не показуємо
     const chips = all.slice(0,HOME_CHIP_LIMIT).map(m=>`<button class="cat-chip" onclick="filterByModel('${htmlEsc(b)}','${htmlEsc(m)}')">${htmlEsc(m)}</button>`).join('');
     const more = all.length>HOME_CHIP_LIMIT ? `<button class="cat-chip more" onclick="filterByBrand('${htmlEsc(b)}')">+ ще ${all.length-HOME_CHIP_LIMIT}</button>` : '';
     return `<div class="cat-brand">
@@ -1044,6 +1052,7 @@ function renderHomeBrandCatalog(){
       <div class="cat-chips">${chips}${more}</div>
     </div>`;
   }).join('');
+  el.innerHTML = cards || '<div style="color:var(--gray-500)">Наразі немає товарів</div>';
 }
 function filterByModel(brand, model){
   catalogCarBrand = brand;

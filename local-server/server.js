@@ -705,6 +705,27 @@ function loadCarCatalog() {
   try { return JSON.parse(fs.readFileSync(CAR_CATALOG_FILE, 'utf8')); } catch { return { models: {}, years: {}, engines: {} }; }
 }
 app.get('/api/car-catalog', (req, res) => res.json(loadCarCatalog()));
+
+// Моделі, для яких є хоч одна запчастина (brand/model або compatibility товару).
+// Використовується каталогом за марками на головній, щоб не показувати порожні
+// моделі. Мемоізація за посиланням на масив товарів — перерахунок лише після
+// зміни products.json (writeData замінює масив у кеші).
+let _availModelsArr = null, _availModelsSig = null;
+app.get('/api/catalog-models', (req, res) => {
+  const products = readData('products.json');
+  if (products !== _availModelsSig) {
+    const set = new Set();
+    for (const p of products) {
+      const compat = (p.compatibility && p.compatibility.length) ? p.compatibility : [{ brand: p.brand, model: p.model }];
+      for (const c of compat) {
+        if (c && c.brand && c.model) set.add(String(c.brand).toLowerCase() + '||' + String(c.model).toLowerCase());
+      }
+    }
+    _availModelsArr = [...set];
+    _availModelsSig = products;
+  }
+  res.json(_availModelsArr);
+});
 app.put('/api/car-catalog', dynamicAdminAuth, (req, res) => {
   const cat = req.body;
   if (!cat || typeof cat !== 'object' || typeof cat.models !== 'object' || typeof cat.years !== 'object' || typeof cat.engines !== 'object') {
