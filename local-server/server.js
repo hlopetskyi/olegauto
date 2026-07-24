@@ -1135,8 +1135,13 @@ app.get('/product/:id', (req, res) => {
     `<p><a href="/catalog">Каталог запчастин</a> &middot; <a href="/contacts">Контакти</a> &middot; <a href="/">Головна</a></p>` +
     `</div></noscript>`;
 
+  // og/twitter image = фото самого товару (абсолютний URL), інакше заглушка
+  const ogImage = imgs.length
+    ? (String(imgs[0]).startsWith('http') ? imgs[0] : SITE_URL + imgs[0])
+    : OG_DEFAULT;
+
   res.send(injectHead(shellHtml(), {
-    title, desc, canonical, ogUrl: canonical, ogImage: OG_DEFAULT,
+    title, desc, canonical, ogUrl: canonical, ogImage,
     jsonLdBlock, noscript: ns
   }));
 });
