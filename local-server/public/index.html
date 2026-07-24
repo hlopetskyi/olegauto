@@ -149,7 +149,7 @@
   .hh-dot.open{background:var(--green)}.hh-dot.closed{background:var(--red)}
   .hh-srow{display:flex;justify-content:space-between;color:var(--gray-500)}
   .hh-srow b{color:var(--gray-900);font-weight:600}
-  .hh-rates.currency-widget{flex-direction:row;gap:14px;border-top:1px solid var(--gray-200);padding-top:7px;min-width:0}
+  .hh-rates.currency-widget{flex-direction:column;gap:3px;border-top:1px solid var(--gray-200);padding-top:7px;min-width:0}
   .hdr-bot{border-top:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;padding:9px 0;gap:16px}
   .hh-nav{display:flex;gap:6px;margin-left:0}
   .hh-nav button{background:none;border:none;padding:8px 14px;font-size:14px;color:var(--gray-700);border-radius:7px;font-weight:600;transition:all .2s}
@@ -593,8 +593,8 @@
       </div>
 
       <div class="hh-phones">
-        <a class="hh-ph" href="tel:+380677448965"><span class="hh-name">Андрій</span><span class="hh-num">(067) 744-89-65</span><span class="hh-tag">· Viber</span></a>
-        <a class="hh-ph" href="tel:+380677533189"><span class="hh-name">Михайло</span><span class="hh-num">(067) 753-31-89</span></a>
+        <a class="hh-ph" href="tel:+380677448965"><span class="hh-name">Андрій</span><span class="hh-num">(067) 744-89-65</span><span class="hh-tag">· Viber, WhatsApp</span></a>
+        <a class="hh-ph" href="tel:+380677533189"><span class="hh-name">Михайло</span><span class="hh-num">(067) 753-31-89</span><span class="hh-tag">· Viber, WhatsApp</span></a>
       </div>
 
       <div class="hh-contacts">
@@ -2235,7 +2235,7 @@ async function loadCurrencyRates() {
     const data = await res.json();
     const widget = document.getElementById('currencyWidget');
     if (!widget) return;
-    ['USD','EUR'].forEach(code => {
+    ['EUR','USD'].forEach(code => {
       const r = data.find(x => x.ccy === code);
       if (!r) return;
       widget.innerHTML += `<div class="cw-row">
