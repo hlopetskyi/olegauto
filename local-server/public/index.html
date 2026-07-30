@@ -106,7 +106,8 @@
   .currency-widget .cw-buy{color:var(--green,#16a34a)}
   .currency-widget .cw-sell{color:var(--red,#dc2626)}
   .currency-widget .cw-sep{color:var(--gray-300)}
-  header{background:#fff;border-bottom:2px solid var(--blue);position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+  /* хедер — звичайна частина сторінки: їде вгору разом з контентом */
+  header{background:#fff;border-bottom:2px solid var(--blue);position:static;z-index:100;box-shadow:var(--shadow)}
   .header-inner{max-width:1280px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:16px;height:64px}
   .logo{display:flex;flex-direction:column;min-width:150px}
   .logo-title{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;color:var(--blue);line-height:1}
@@ -2395,13 +2396,14 @@ function toggleFilters() {
   body.classList.toggle('open');
 }
 
-// FAB hide on scroll down, scroll-to-top button
+// FAB hide on scroll down, scroll-to-top button, auto-hide header
 let _lastScrollY = 0;
 window.addEventListener('scroll', () => {
-  const y = window.scrollY;
+  const y = Math.max(0, window.scrollY);
+  const delta = y - _lastScrollY;
   const fab = document.querySelector('.fab-wrap');
   if(fab) {
-    fab.style.transform = (y > _lastScrollY && y > 150) ? 'translateY(200px)' : '';
+    fab.style.transform = (delta > 0 && y > 150) ? 'translateY(200px)' : '';
   }
   const topBtn = document.getElementById('scrollTopBtn');
   if(topBtn) topBtn.classList.toggle('visible', y > 350);
