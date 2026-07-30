@@ -1602,6 +1602,13 @@ function resetAllFilters() {
   loadCatalogProducts();
 }
 
+// Ціна може бути текстовою ("Договірна") — тоді показуємо текст замість €N
+function fmtPrice(p) {
+  if (p && p.priceText) return p.priceText;
+  const n = Number(p && p.price) || 0;
+  return '€' + n.toLocaleString('de-DE');
+}
+
 // ============ PRODUCT CARD ============
 function renderProductCard(p) {
   const imgHtml = p.image
@@ -1630,7 +1637,7 @@ function renderProductCard(p) {
     <div style="margin-top:auto">
       ${stockHtml}
       <div class="product-footer" style="margin-top:8px">
-        <div class="product-price">€${p.price.toLocaleString('de-DE')} </div>
+        <div class="product-price">${fmtPrice(p)} </div>
         <div style="display:flex;gap:6px;align-items:center">
           <button class="compare-btn ${compareList.some(x=>x.id===p.id)?'active':''}" data-id="${p.id}" onclick="event.stopPropagation();toggleCompare(${p.id},${JSON.stringify(p.name)},event)" title="Порівняти"><i class="fas fa-balance-scale"></i></button>
           <button class="btn-cart" onclick="event.stopPropagation();addToCart(${p.id})">
@@ -1699,7 +1706,8 @@ async function loadProductDetail(id) {
         brand: { '@type': 'Brand', name: p.supplierBrand || p.brand || 'OlegAvto' },
         category: p.category || undefined,
         itemCondition: p.condition === 'used' ? 'https://schema.org/UsedCondition' : 'https://schema.org/NewCondition',
-        offers: {
+        // договірна ціна — offers не подаємо (краще без ціни, ніж €0)
+        offers: p.priceText ? undefined : {
           '@type': 'Offer',
           price: p.price,
           priceCurrency: 'EUR',
@@ -1717,7 +1725,7 @@ async function loadProductDetail(id) {
     const stickyPrice = document.getElementById('detailStickyPrice');
     const stickyBtn = document.getElementById('detailStickyBtn');
     if(stickyBar && stickyPrice && stickyBtn) {
-      stickyPrice.textContent = `€${p.price.toLocaleString('de-DE')}`;
+      stickyPrice.textContent = fmtPrice(p);
       if(p.stock <= 0) { stickyBtn.disabled = true; stickyBtn.innerHTML = '<i class="fas fa-times"></i> Немає'; }
       else { stickyBtn.disabled = false; stickyBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> В кошик'; }
       stickyBar.style.display = '';
@@ -1733,7 +1741,7 @@ async function loadProductDetail(id) {
       <span class="badge badge-category">${p.category}</span>
     </div>
     <h1>${p.name}</h1>
-    <div class="detail-price">€${p.price.toLocaleString('de-DE')}</div>
+    <div class="detail-price">${fmtPrice(p)}</div>
     <div style="margin-bottom:16px;font-size:14px">${stockLabel}</div>
     <div class="detail-attrs">
       ${p.oem?`<div class="attr-row"><span class="attr-label">OEM номер</span><span class="attr-value">${p.oem}</span></div>`:''}
@@ -1822,7 +1830,7 @@ function addToCart(id) {
     const inCart = idx>=0 ? cart[idx].qty : 0;
     if(inCart>=p.stock){ showToast(`В наявності лише ${p.stock} шт`,'error'); return; }
     if(idx>=0) cart[idx].qty++;
-    else cart.push({id:p.id,name:p.name,price:p.price,image:p.image,category:p.category,brand:p.brand,model:p.model,article:p.article||'',qty:1,stock:p.stock});
+    else cart.push({id:p.id,name:p.name,price:p.price,priceText:p.priceText||'',image:p.image,category:p.category,brand:p.brand,model:p.model,article:p.article||'',qty:1,stock:p.stock});
     if(idx>=0) cart[idx].stock = p.stock;
     saveCart();
     window.track && track('add_to_cart', { pid: p.id, name: p.name, value: p.price });
@@ -1892,7 +1900,7 @@ function renderCart() {
     <span class="qty-val">${c.qty}</span>
     <button class="qty-btn" onclick="changeQty(${i},1)" ${c.stock && c.qty >= c.stock ? 'disabled style="opacity:.35;cursor:not-allowed"' : ''}>+</button>
   </div>
-  <div class="cart-item-price">€${(c.price*c.qty).toLocaleString('de-DE')}</div>
+  <div class="cart-item-price">${c.priceText ? c.priceText : '€'+(c.price*c.qty).toLocaleString('de-DE')}</div>
   <button class="cart-del" onclick="removeCartItem(${i})" title="Видалити"><i class="fas fa-times"></i></button>
 </div>`).join('')}
     <div class="checkout-form" id="checkoutForm">
@@ -1938,6 +1946,7 @@ function renderCart() {
       <h3>Підсумок</h3>
       <div class="sum-row"><span>Товарів (${cart.reduce((s,c)=>s+c.qty,0)} шт)</span><span>€${subtotal.toLocaleString('de-DE')}</span></div>
       <div class="sum-total"><span>Разом</span><span style="color:var(--orange)">€${total.toLocaleString('de-DE')}</span></div>
+      ${cart.some(c=>c.priceText) ? `<div style="font-size:12px;color:var(--orange);margin:10px 0;line-height:1.5;font-weight:600"><i class="fas fa-info-circle" style="margin-right:4px"></i>У замовленні є позиції з договірною ціною — менеджер уточнить вартість при дзвінку</div>` : ''}
       <div style="font-size:12px;color:var(--gray-500);margin:12px 0;line-height:1.5"><i class="fas fa-truck" style="margin-right:4px"></i>Доставка Новою Поштою — оплачується окремо при отриманні</div>
       <button class="btn-checkout" onclick="document.getElementById('checkoutForm').scrollIntoView({behavior:'smooth'})">
         <i class="fas fa-arrow-down"></i> Оформити замовлення
@@ -2127,7 +2136,7 @@ function addToRecentlyViewed(p) {
   try {
     let list = JSON.parse(localStorage.getItem(RECENT_KEY)) || [];
     list = list.filter(x=>x.id!==p.id);
-    list.unshift({id:p.id, name:p.name, price:p.price, image:p.image||null, category:p.category});
+    list.unshift({id:p.id, name:p.name, price:p.price, priceText:p.priceText||'', image:p.image||null, category:p.category});
     localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0,10)));
   } catch {}
 }
@@ -2143,7 +2152,7 @@ function loadRecentlyViewed() {
   <div class="recent-card-img">${p.image?`<img src="${p.image}" alt="${p.name}" loading="lazy">`:(CAT_EMOJI[p.category]||'🔧')}</div>
   <div class="recent-card-body">
     <div class="recent-card-name">${p.name}</div>
-    <div class="recent-card-price">€${(+p.price).toLocaleString('de-DE')}</div>
+    <div class="recent-card-price">${fmtPrice(p)}</div>
   </div>
 </div>`).join('');
   } catch {}

@@ -239,10 +239,22 @@ app.get('/api/products/:id', (req, res) => {
   res.json(p);
 });
 
+// Ціна може бути числом ("3200") або текстом ("Договірна"). Текстова ціна
+// зберігається в priceText, а price лишається числом 0 — щоб фільтри,
+// сортування та підрахунок сум ніде не ламались.
+function parsePriceInput(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return { price: 0, priceText: '' };
+  const num = parseFloat(s.replace(',', '.'));
+  if (!isNaN(num) && /^[\d\s.,]+$/.test(s)) return { price: Math.round(num), priceText: '' };
+  return { price: 0, priceText: s.slice(0, 40) };
+}
+
 app.post('/api/products', upload.array('images', 5), (req, res) => {
   const products = readData('products.json');
   const compatibility = JSON.parse(req.body.compatibility || '[]');
   const images = (req.files || []).map(f => '/uploads/' + f.filename);
+  const pr = parsePriceInput(req.body.price);
   const product = {
     id: nextId(products),
     name: req.body.name,
@@ -253,7 +265,8 @@ app.post('/api/products', upload.array('images', 5), (req, res) => {
     yearTo: req.body.yearTo || '',
     category: req.body.category,
     condition: req.body.condition,
-    price: parseInt(req.body.price) || 0,
+    price: pr.price,
+    priceText: pr.priceText,
     stock: parseInt(req.body.stock) || 0,
     oem: req.body.oem || '',
     article: req.body.article || '',
@@ -301,7 +314,8 @@ app.put('/api/products/:id', upload.array('images', 5), (req, res) => {
     yearTo: req.body.yearTo || '',
     category: req.body.category,
     condition: req.body.condition,
-    price: parseInt(req.body.price) || 0,
+    price: parsePriceInput(req.body.price).price,
+    priceText: parsePriceInput(req.body.price).priceText,
     stock: parseInt(req.body.stock) || 0,
     oem: req.body.oem || '',
     article: req.body.article || '',
@@ -335,7 +349,11 @@ app.patch('/api/products/:id', (req, res) => {
   const products = readData('products.json');
   const idx = products.findIndex(p => p.id === parseInt(req.params.id));
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  if (req.body.price !== undefined) products[idx].price = parseInt(req.body.price) || 0;
+  if (req.body.price !== undefined) {
+    const pr = parsePriceInput(req.body.price);
+    products[idx].price = pr.price;
+    products[idx].priceText = pr.priceText;
+  }
   if (req.body.stock !== undefined) products[idx].stock = parseInt(req.body.stock) || 0;
   writeData('products.json', products);
   res.json(products[idx]);
@@ -493,7 +511,7 @@ app.post('/api/orders', async (req, res) => {
   writeData('orders.json', orders);
   res.json(order);
 
-  const items = (order.items||[]).map(i=>`  • ${i.name} × ${i.qty} — €${i.price}`).join('\n');
+  const items = (order.items||[]).map(i=>`  • ${i.name} × ${i.qty} — ${i.priceText ? i.priceText : '€'+i.price}`).join('\n');
   const deliveryLine = order.delivery === 'nova_poshta'
     ? `🚚 Нова Пошта: ${order.city||'—'}${order.warehouse ? ', ' + order.warehouse : ''}`
     : `🏠 Самовивіз: Комарно, вул. Річкова 1`;
@@ -1094,7 +1112,8 @@ app.get('/product/:id', (req, res) => {
 
   const cs = productCompatStr(p);
   const title = `${p.name} — купити | OlegAvto`;
-  const desc = `${p.name}${cs ? ' для ' + cs : ''}. ${p.condition === 'new' ? 'Новий' : 'Б/У'}. Ціна: €${p.price}. ${p.stock > 0 ? 'В наявності.' : 'Під замовлення.'} Доставка Новою Поштою.`;
+  const priceStr = p.priceText ? p.priceText : `€${p.price}`;
+  const desc = `${p.name}${cs ? ' для ' + cs : ''}. ${p.condition === 'new' ? 'Новий' : 'Б/У'}. Ціна: ${priceStr}. ${p.stock > 0 ? 'В наявності.' : 'Під замовлення.'} Доставка Новою Поштою.`;
   const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
   const canonical = `${SITE_URL}/product/${p.id}`;
 
@@ -1108,7 +1127,8 @@ app.get('/product/:id', (req, res) => {
     brand: { '@type': 'Brand', name: p.supplierBrand || p.brand || 'OlegAvto' },
     category: p.category || undefined,
     itemCondition: p.condition === 'used' ? 'https://schema.org/UsedCondition' : 'https://schema.org/NewCondition',
-    offers: {
+    // Договірна ціна: offers не додаємо — краще без ціни, ніж оголосити €0
+    offers: p.priceText ? undefined : {
       '@type': 'Offer', price: p.price, priceCurrency: 'EUR',
       availability: p.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       url: canonical, priceValidUntil: futureDate(30),
@@ -1131,7 +1151,7 @@ app.get('/product/:id', (req, res) => {
     `<p>${htmlAttr(desc)}</p>` +
     (cs ? `<p>Сумісність: ${htmlAttr(cs)}</p>` : '') +
     (p.oem ? `<p>OEM: ${htmlAttr(p.oem)}</p>` : '') +
-    `<p>Ціна: €${htmlAttr(p.price)}</p>` +
+    `<p>Ціна: ${htmlAttr(priceStr)}</p>` +
     `<p><a href="/catalog">Каталог запчастин</a> &middot; <a href="/contacts">Контакти</a> &middot; <a href="/">Головна</a></p>` +
     `</div></noscript>`;
 

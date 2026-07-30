@@ -530,7 +530,8 @@
           </div>
           <div class="form-field required">
             <label>Ціна (€)</label>
-            <input type="number" id="fPrice" placeholder="3200" min="0" required>
+            <input type="text" id="fPrice" placeholder="3200 або Договірна" required>
+            <div style="font-size:11.5px;color:var(--gray-500);margin-top:4px">Число в євро — або текст, напр. «Договірна»</div>
           </div>
           <div class="form-field">
             <label>Кількість на складі</label>
@@ -976,7 +977,7 @@ function renderProductsTable() {
       <td class="inline-edit-cell" onclick="inlineEditSelect(event,${p.id},'brand','${p.brand}',BRANDS)" title="Клацни для зміни бренду">${compat}</td>
       <td class="inline-edit-cell" onclick="inlineEditSelect(event,${p.id},'category','${p.category}',Object.keys(CAT_EMOJI))" title="Клацни для редагування" style="color:var(--gray-600);font-size:13px">${p.category}</td>
       <td class="inline-edit-cell" onclick="inlineEditSelect(event,${p.id},'condition','${p.condition}',Object.keys(COND_LABELS),COND_LABELS)" title="Клацни для редагування"><span class="badge ${COND_BADGE[p.condition]||'badge-new'}">${COND_LABELS[p.condition]||p.condition}</span></td>
-      <td class="inline-edit-cell" onclick="inlineEdit(event,${p.id},'price',${p.price})" title="Клацни для редагування" style="font-weight:700;color:var(--orange)">${p.price.toLocaleString('de-DE')} €</td>
+      <td class="inline-edit-cell" onclick="inlineEdit(event,${p.id},'price',${JSON.stringify(p.priceText || p.price)})" title="Клацни для редагування" style="font-weight:700;color:var(--orange)">${p.priceText ? esc(p.priceText) : p.price.toLocaleString('de-DE') + ' €'}</td>
       <td class="inline-edit-cell" onclick="inlineEdit(event,${p.id},'stock',${p.stock})" title="Клацни для редагування"><span class="${stockCls}">${stockTxt}</span></td>
       <td style="white-space:nowrap">
         <button class="act-btn" onclick="openProductPreview(${p.id})" title="Переглянути на сайті"><i class="fas fa-eye"></i></button>
@@ -1348,7 +1349,7 @@ async function editProduct(id) {
   document.getElementById('fYearTo').value = p.yearTo||'';
   document.getElementById('fCategory').value = p.category||'';
   document.getElementById('fCondition').value = p.condition||'';
-  document.getElementById('fPrice').value = p.price||0;
+  document.getElementById('fPrice').value = p.priceText || p.price || 0;
   document.getElementById('fStock').value = p.stock||0;
   checkStockWarning(document.getElementById('fStock'));
   setOemValues((p.oem||'').split(',').map(s=>s.trim()).filter(Boolean));
@@ -1542,12 +1543,26 @@ async function bulkUpdate() {
 function inlineEdit(event, id, field, currentVal) {
   const cell = event.currentTarget;
   if(cell.querySelector('input')) return;
+  const isPrice = field === 'price'; // ціна може бути текстом ("Договірна")
   const input = document.createElement('input');
-  input.type='number'; input.value=currentVal; input.min=0;
-  input.style.cssText='width:80px;padding:4px 8px;border:1.5px solid var(--blue);border-radius:6px;font-size:13px;font-weight:600;outline:none';
+  if(isPrice){ input.type='text'; } else { input.type='number'; input.min=0; }
+  input.value=currentVal;
+  input.style.cssText=`width:${isPrice?'110px':'80px'};padding:4px 8px;border:1.5px solid var(--blue);border-radius:6px;font-size:13px;font-weight:600;outline:none`;
   cell.innerHTML=''; cell.appendChild(input);
   input.focus(); input.select();
   const save = async () => {
+    if(isPrice){
+      const raw = input.value.trim();
+      if(!raw){renderProductsTable();return;}
+      const res = await fetch(`/api/products/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({price:raw})});
+      const saved = await res.json();
+      const p = allProducts.find(x=>x.id===id);
+      if(p){ p.price = saved.price; p.priceText = saved.priceText || ''; }
+      applyProductFilter();
+      renderProductsTable();
+      showToast(`Ціна оновлена: ${saved.priceText || saved.price + ' €'}`,'success');
+      return;
+    }
     const val = parseInt(input.value);
     if(isNaN(val)||val<0){renderProductsTable();return;}
     await fetch(`/api/products/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:val})});
@@ -1555,7 +1570,7 @@ function inlineEdit(event, id, field, currentVal) {
     if(p) p[field]=val;
     applyProductFilter();
     renderProductsTable();
-    showToast(field==='price'?`Ціна оновлена: ${val} €`:`Залишок оновлено: ${val} шт`,'success');
+    showToast(`Залишок оновлено: ${val} шт`,'success');
   };
   input.addEventListener('blur', save);
   input.addEventListener('keydown', e=>{
