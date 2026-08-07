@@ -22,6 +22,26 @@ When writing a file in the "MUST NOT" list, switch to normal full English regard
 - Commit message: imperative, ≤50 chars subject, explain *why* in body if non-obvious
 - Always push immediately after committing
 
+## Token Efficiency — Hard Rules
+
+Пріоритет: мінімум токенів на дію. Порушення = марна трата ліміту користувача.
+
+- **Ніяких скріншотів для перевірки логіки.** Скріншот лише коли користувач просить показати вигляд або коли треба оцінити саме верстку. Перевірка стану — через `javascript_tool` одним викликом, що повертає короткий JSON.
+- **Один пакетний виклик замість серії.** Групуй перевірки в один bash/JS виклик; не роби 5 окремих `grep`, коли можна один.
+- **Не читати файл цілком.** `grep -n` з вузьким патерном, `sed -n 'X,Yp'` на 10–20 рядків. `Read` цілого index.html (2000+ рядків) заборонено.
+- **Не дублювати перевірку.** Якщо `curl` уже підтвердив результат — не відкривати те саме в браузері.
+- **Коротка відповідь.** Підсумок 3–6 рядків: що змінив, де перевірив, що далі. Без переказу вже зробленого і без повторних інструкцій.
+- **Не перезапускати сервер даремно.** `pm2 restart` / `preview_start` лише коли міняється `server.js` або треба скинути `_shellCache` (зміни в `index.html`, бо він кешується в пам'яті).
+
+## Проект — поточний стан (оновлювати коротко)
+
+Прод: `olegavto.com`, деплой `scp` на `root@167.233.90.80:/root/olegauto/` + `pm2 restart olegauto`.
+Локально: `preview_start` (порт 3000). Головна = `public/index.html` (SPA + SSR-head у `server.js`).
+
+Робочий процес змін дизайну: локально → git commit+push → `preview.html` на проді (чернетка) → бекап `index.html.old.$(date)` → `cp preview.html index.html` → `pm2 restart`.
+
+Зроблено (липень 2026): редизайн головної у стилі buscentr (хедер з телефонами/Viber/WhatsApp/графіком/курсами, hero-пошук, каталог за марками з чіпами лише для моделей, що мають товари — `GET /api/catalog-models`), хедер не липкий, ціна може бути текстом («Договірна» → `priceText`, `price=0`), редактор марок/моделей в адмінці (`data/car-catalog.json`), og:image товару = його фото.
+
 ## Obsidian — Conversation Context
 
 - **Before starting work**: check `/Users/ruslanhlopeckij/Desktop/Obsidian_memory/Game/Changes/` for recent daily logs to understand what changed last session
@@ -38,7 +58,7 @@ When writing a file in the "MUST NOT" list, switch to normal full English regard
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **olegauto** (136 symbols, 139 relationships, 0 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **olegauto** (387 symbols, 422 relationships, 1 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
