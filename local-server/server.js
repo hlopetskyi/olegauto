@@ -1114,7 +1114,8 @@ app.get('/product/:id', (req, res) => {
   const title = `${p.name} — купити | OlegAvto`;
   const priceStr = p.priceText ? p.priceText : `€${p.price}`;
   const desc = `${p.name}${cs ? ' для ' + cs : ''}. ${p.condition === 'new' ? 'Новий' : 'Б/У'}. Ціна: ${priceStr}. ${p.stock > 0 ? 'В наявності.' : 'Під замовлення.'} Доставка Новою Поштою.`;
-  const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+  const imgsRaw = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+  const imgs = imgsRaw.map(u => /^https?:\/\//i.test(u) ? u : SITE_URL + (u.startsWith('/') ? u : '/' + u));
   const canonical = `${SITE_URL}/product/${p.id}`;
 
   const productLd = {
@@ -1127,14 +1128,17 @@ app.get('/product/:id', (req, res) => {
     brand: { '@type': 'Brand', name: p.supplierBrand || p.brand || 'OlegAvto' },
     category: p.category || undefined,
     itemCondition: p.condition === 'used' ? 'https://schema.org/UsedCondition' : 'https://schema.org/NewCondition',
-    // Договірна ціна: offers не додаємо — краще без ціни, ніж оголосити €0
-    offers: p.priceText ? undefined : {
+    offers: {
       '@type': 'Offer', price: p.price, priceCurrency: 'EUR',
       availability: p.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       url: canonical, priceValidUntil: futureDate(30),
       seller: { '@type': 'Organization', name: 'OlegAvto' }
     }
   };
+  // Договірна ціна (price=0): Product без offers — помилка в Search Console,
+  // а offers з ціною 0 = "безкоштовно". Тому такі товари взагалі не позначаємо
+  // як Product — лишається тільки BreadcrumbList.
+  const hasRealPrice = !p.priceText && Number(p.price) > 0;
   const breadcrumbLd = {
     '@context': 'https://schema.org', '@type': 'BreadcrumbList',
     itemListElement: [
@@ -1144,7 +1148,7 @@ app.get('/product/:id', (req, res) => {
     ]
   };
   const jsonLdBlock =
-    `<script type="application/ld+json" id="jsonLd">${jsonLdSafe(productLd)}</script>\n` +
+    (hasRealPrice ? `<script type="application/ld+json" id="jsonLd">${jsonLdSafe(productLd)}</script>\n` : '') +
     `<script type="application/ld+json">${jsonLdSafe(breadcrumbLd)}</script>`;
 
   const ns = `<noscript><div><h1>${htmlAttr(p.name)}</h1>` +

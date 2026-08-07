@@ -1135,6 +1135,7 @@ function updateMeta({ title, desc, image, url, jsonLd } = {}) {
   if(canonical) canonical.href = url || SITE + '/';
   const ld = document.getElementById('jsonLd');
   if(ld && jsonLd) ld.textContent = JSON.stringify(jsonLd);
+  else if(ld && jsonLd === null) ld.remove(); // договірна ціна: Product без offers = помилка в Search Console
 }
 
 function showPage(name, opts={}, noPush=false) {
@@ -1688,26 +1689,26 @@ async function loadProductDetail(id) {
 
     const compatStr = (p.compatibility&&p.compatibility.length?p.compatibility:[{brand:p.brand,model:p.model}])
       .filter(c=>c.brand).map(c=>c.model?`${c.brand} ${c.model}`:c.brand).join(', ');
-    const metaDesc = `${p.name}${compatStr?' для '+compatStr:''}. ${p.condition==='new'?'Новий':'Б/У'}. Ціна: €${p.price}. ${p.stock>0?'В наявності.':'Під замовлення.'} Доставка Новою Поштою.`;
+    const metaDesc = `${p.name}${compatStr?' для '+compatStr:''}. ${p.condition==='new'?'Новий':'Б/У'}. Ціна: ${p.priceText ? p.priceText : '€'+p.price}. ${p.stock>0?'В наявності.':'Під замовлення.'} Доставка Новою Поштою.`;
     const _pvu = new Date(Date.now() + 30*86400000).toISOString().slice(0,10);
+    const _hasPrice = !p.priceText && Number(p.price) > 0;
     updateMeta({
       title: `${p.name} — купити | OlegAvto`,
       desc: metaDesc,
       image: imgs[0] || '',
       url: `${SITE}/product/${p.id}`,
-      jsonLd: {
+      jsonLd: !_hasPrice ? null : {
         '@context': 'https://schema.org',
         '@type': 'Product',
         name: p.name,
         description: metaDesc,
-        image: imgs,
+        image: imgs.map(u => /^https?:\/\//i.test(u) ? u : SITE + (u.startsWith('/') ? u : '/' + u)),
         sku: p.article || p.oem,
         mpn: p.oem || undefined,
         brand: { '@type': 'Brand', name: p.supplierBrand || p.brand || 'OlegAvto' },
         category: p.category || undefined,
         itemCondition: p.condition === 'used' ? 'https://schema.org/UsedCondition' : 'https://schema.org/NewCondition',
-        // договірна ціна — offers не подаємо (краще без ціни, ніж €0)
-        offers: p.priceText ? undefined : {
+        offers: {
           '@type': 'Offer',
           price: p.price,
           priceCurrency: 'EUR',
