@@ -34,6 +34,15 @@
   /* Analytics */
   .an-range-btn{border:none;background:transparent;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;color:var(--gray-500);cursor:pointer;transition:all .15s}
   .an-range-btn.active{background:#fff;color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+  .an-daily-table{width:100%;border-collapse:collapse;font-size:13px}
+  .an-daily-table th{position:sticky;top:0;background:var(--gray-100);text-align:right;padding:8px 10px;font-size:12px;font-weight:700;color:var(--gray-500);white-space:nowrap;z-index:1}
+  .an-daily-table th:first-child,.an-daily-table td:first-child{text-align:left}
+  .an-daily-table td{padding:8px 10px;text-align:right;border-top:1px solid var(--gray-200);white-space:nowrap}
+  .an-daily-table tbody tr{cursor:pointer}
+  .an-daily-table tbody tr:hover{background:var(--gray-100)}
+  .an-daily-table tbody tr.an-row-empty{color:var(--gray-400)}
+  .an-daily-table tbody tr.active{background:#e8f1ff}
+  .an-daily-table td.an-strong{font-weight:700;color:var(--gray-900)}
   .an-funnel-row{margin-bottom:14px}
   .an-funnel-head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
   .an-funnel-head b{font-weight:700;color:var(--gray-900)}
@@ -323,6 +332,11 @@
           <button class="an-range-btn" data-days="30" onclick="setAnRange(30)">30 днів</button>
           <button class="an-range-btn" data-days="90" onclick="setAnRange(90)">90 днів</button>
         </div>
+        <input type="date" id="anDate" onchange="setAnDate(this.value)" title="Показати статистику за конкретний день"
+               style="padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit">
+        <button class="btn-secondary btn-sm" id="anDateClear" onclick="setAnDate('')" style="display:none">
+          <i class="fas fa-xmark"></i> Скинути день
+        </button>
         <button class="btn-primary" onclick="loadAnalytics()"><i class="fas fa-sync-alt"></i> Оновити</button>
       </div>
     </div>
@@ -346,6 +360,18 @@
         <div class="card">
           <div class="card-title"><span><i class="fas fa-users" style="color:var(--blue);margin-right:8px"></i>Відвідувачі за період</span><span id="anVisitorsTotal" style="font-size:13px;font-weight:400;color:var(--gray-500)"></span></div>
           <div id="anDailyChart" style="padding:8px 0"></div>
+          <div style="font-size:12px;color:var(--gray-400);margin-top:4px">Натисніть на стовпчик, щоб побачити статистику за цей день</div>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <span><i class="fas fa-calendar-days" style="color:var(--blue);margin-right:8px"></i>Статистика по днях</span>
+            <span style="font-size:13px;font-weight:400;color:var(--gray-500)">
+              <button class="btn-secondary btn-sm" onclick="exportAnDailyCSV()"><i class="fas fa-download"></i> CSV</button>
+            </span>
+          </div>
+          <div style="max-height:460px;overflow:auto">
+            <table class="an-daily-table" id="anDailyTable"></table>
+          </div>
         </div>
       </div>
 
@@ -1884,22 +1910,41 @@ function printOrder() {
 
 // ============ ANALYTICS ============
 let _anDays = 7;
+let _anDate = '';      // '' = діапазон днів, інакше конкретний день YYYY-MM-DD
+let _anDaily = [];     // останній денний ряд — для таблиці та експорту
 function setAnTab(tab) {
   document.querySelectorAll('.an-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.an-panel').forEach(p => p.classList.toggle('active', p.id === 'an-panel-' + tab));
 }
 function setAnRange(days) {
   _anDays = days;
+  _anDate = '';
+  document.getElementById('anDate').value = '';
+  document.getElementById('anDateClear').style.display = 'none';
   document.querySelectorAll('.an-range-btn').forEach(b => b.classList.toggle('active', +b.dataset.days === days));
+  loadAnalytics();
+}
+// Один конкретний день; порожнє значення повертає до режиму діапазону
+function setAnDate(date) {
+  _anDate = date || '';
+  document.getElementById('anDate').value = _anDate;
+  document.getElementById('anDateClear').style.display = _anDate ? '' : 'none';
+  document.querySelectorAll('.an-range-btn').forEach(b => b.classList.toggle('active', !_anDate && +b.dataset.days === _anDays));
   loadAnalytics();
 }
 async function loadAnalytics() {
   const empty = document.getElementById('anEmpty');
   const content = document.getElementById('anContent');
   try {
-    const d = await fetch('/api/analytics?days=' + _anDays).then(r => r.json());
+    const qs = _anDate ? 'date=' + _anDate : 'days=' + _anDays;
+    const d = await fetch('/api/analytics?' + qs).then(r => r.json());
+    _anDaily = d.daily || [];
     if (!d.totals || d.totals.events === 0) {
-      empty.style.display = 'block'; content.style.display = 'none'; return;
+      empty.style.display = 'block'; content.style.display = 'none';
+      empty.innerHTML = _anDate
+        ? `За ${new Date(_anDate).toLocaleDateString('uk-UA')} даних немає. <a href="#" onclick="setAnDate('');return false" style="color:var(--blue)">Показати весь період</a>`
+        : '<i class="fas fa-chart-line" style="font-size:40px;margin-bottom:12px;display:block;opacity:.4"></i>Даних поки немає. Статистика почне збиратись після візитів на сайт.';
+      return;
     }
     empty.style.display = 'none'; content.style.display = 'block';
 
@@ -1915,6 +1960,7 @@ async function loadAnalytics() {
       card('Замовлення', t.orders, 'fa-clipboard-check', 'stat-red');
 
     renderAnDaily(d.daily);
+    renderAnDailyTable(d.daily);
     renderAnFunnel(d.funnel);
     renderAnDevice(d.device);
     renderAnTop(d.topProducts);
@@ -1930,20 +1976,72 @@ function renderAnDaily(daily) {
   const counts = daily.map(x => x.visitors);
   const maxC = Math.max(...counts, 1);
   const total = counts.reduce((a, b) => a + b, 0);
-  document.getElementById('anVisitorsTotal').textContent = `${total} відвідувачів за ${_anDays} днів`;
+  document.getElementById('anVisitorsTotal').textContent = _anDate
+    ? `${total} відвідувачів за ${new Date(_anDate).toLocaleDateString('uk-UA')}`
+    : `${total} відвідувачів за ${_anDays} днів`;
   const W = 100 / N;
   const bars = daily.map((x, i) => {
     const h = Math.round((x.visitors / maxC) * 120);
     const px = i * W;
     const lbl = new Date(x.date).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
     const showLbl = N <= 14 || i % Math.ceil(N / 14) === 0;
-    return `<g>
-      <rect x="${px + W * 0.15}%" y="${130 - h}" width="${W * 0.7}%" height="${h}" rx="3" fill="${x.visitors > 0 ? 'var(--blue)' : 'var(--gray-200)'}" opacity="0.85"/>
+    return `<g style="cursor:pointer" onclick="setAnDate('${x.date}')"><title>${lbl}: ${x.visitors} відвідувачів</title>
+      <rect x="${px}%" y="0" width="${W}%" height="140" fill="transparent"/>
+      <rect x="${px + W * 0.15}%" y="${130 - h}" width="${W * 0.7}%" height="${h || 2}" rx="3" fill="${x.date === _anDate ? 'var(--orange)' : (x.visitors > 0 ? 'var(--blue)' : 'var(--gray-200)')}" opacity="0.85"/>
       ${x.visitors > 0 && N <= 31 ? `<text x="${px + W / 2}%" y="${124 - h}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--blue)">${x.visitors}</text>` : ''}
       ${showLbl ? `<text x="${px + W / 2}%" y="148" text-anchor="middle" font-size="9" fill="var(--gray-500)">${lbl}</text>` : ''}
     </g>`;
   }).join('');
   el.innerHTML = `<svg width="100%" height="155" style="overflow:visible">${bars}</svg>`;
+}
+// Таблиця: один рядок на кожен день періоду, найновіший зверху
+function renderAnDailyTable(daily) {
+  const el = document.getElementById('anDailyTable');
+  if (!el) return;
+  const rows = daily.slice().reverse();
+  const head = `<thead><tr>
+    <th>Дата</th><th>Відвідувачі</th><th>Сесії</th><th>Перегляди</th>
+    <th>Товари</th><th>Телефон</th><th>Viber</th><th>Кошик</th><th>Замовлення</th>
+  </tr></thead>`;
+  const fmt = d => {
+    const dt = new Date(d + 'T00:00:00');
+    const wd = dt.toLocaleDateString('uk-UA', { weekday: 'short' });
+    return `${dt.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })} <span style="color:var(--gray-400)">${wd}</span>`;
+  };
+  const body = rows.map(x => {
+    const empty = !x.visitors && !x.pageViews;
+    return `<tr class="${empty ? 'an-row-empty' : ''}${x.date === _anDate ? ' active' : ''}" onclick="setAnDate('${x.date}')" title="Показати тільки цей день">
+      <td>${fmt(x.date)}</td>
+      <td class="an-strong">${x.visitors}</td>
+      <td>${x.sessions}</td>
+      <td>${x.pageViews}</td>
+      <td>${x.productViews}</td>
+      <td>${x.phoneClicks}</td>
+      <td>${x.viberClicks}</td>
+      <td>${x.addToCart}</td>
+      <td class="an-strong">${x.orders}</td>
+    </tr>`;
+  }).join('');
+  const sum = k => rows.reduce((a, b) => a + (b[k] || 0), 0);
+  const foot = `<tfoot><tr style="border-top:2px solid var(--gray-200);font-weight:700">
+    <td>Разом</td><td>${sum('visitors')}</td><td>${sum('sessions')}</td><td>${sum('pageViews')}</td>
+    <td>${sum('productViews')}</td><td>${sum('phoneClicks')}</td><td>${sum('viberClicks')}</td>
+    <td>${sum('addToCart')}</td><td>${sum('orders')}</td>
+  </tr></tfoot>`;
+  el.innerHTML = head + `<tbody>${body}</tbody>` + foot;
+}
+function exportAnDailyCSV() {
+  const cols = [['date', 'Дата'], ['visitors', 'Відвідувачі'], ['sessions', 'Сесії'], ['pageViews', 'Перегляди сторінок'],
+    ['productViews', 'Перегляди товарів'], ['phoneClicks', 'Кліки телефон'], ['viberClicks', 'Кліки Viber'],
+    ['addToCart', 'Додано в кошик'], ['orders', 'Замовлення']];
+  const lines = [cols.map(c => c[1]).join(';')]
+    .concat(_anDaily.map(x => cols.map(c => x[c[0]]).join(';')));
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `analytics-${_anDaily[0]?.date || 'day'}_${_anDaily[_anDaily.length - 1]?.date || ''}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 function renderAnFunnel(funnel) {
   const el = document.getElementById('anFunnel');

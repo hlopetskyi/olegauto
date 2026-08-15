@@ -874,9 +874,17 @@ app.post('/api/track', (req, res) => {
   } catch (e) { res.status(204).end(); }
 });
 
+// Календарна дата події за київським часом (події пишуться в UTC)
+function kyivDay(iso) {
+  try { return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Europe/Kyiv' }); }
+  catch { return String(iso || '').slice(0, 10); }
+}
+
 // Admin-only aggregation
+// ?days=N — останні N днів; ?date=YYYY-MM-DD — рівно один день (київський час)
 app.get('/api/analytics', dynamicAdminAuth, (req, res) => {
-  const days = Math.min(365, Math.max(1, parseInt(req.query.days) || 30));
+  const dayParam = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : null;
+  const days = dayParam ? 1 : Math.min(365, Math.max(1, parseInt(req.query.days) || 30));
   const since = Date.now() - days * 86400000;
   let events = [];
   try {
@@ -885,7 +893,7 @@ app.get('/api/analytics', dynamicAdminAuth, (req, res) => {
       if (!line) continue;
       try {
         const e = JSON.parse(line);
-        if (new Date(e.t).getTime() >= since) events.push(e);
+        if (dayParam ? kyivDay(e.t) === dayParam : new Date(e.t).getTime() >= since) events.push(e);
       } catch {}
     }
   } catch { events = []; }
@@ -919,22 +927,32 @@ app.get('/api/analytics', dynamicAdminAuth, (req, res) => {
   const allViewedProducts = Object.values(prodCounts).sort((a, b) => b.count - a.count);
   const topProducts = allViewedProducts.slice(0, 10);
 
-  // Daily series (visitors = unique vid/day, orders = purchase count/day)
-  const daily = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000);
-    const dayStr = d.toISOString().slice(0, 10);
-    const dayEvents = events.filter(e => (e.t || '').startsWith(dayStr));
-    daily.push({
+  // Denna serie: одна точка на кожен календарний день (київський час)
+  const byDay = {};
+  for (const e of events) (byDay[kyivDay(e.t)] = byDay[kyivDay(e.t)] || []).push(e);
+
+  const dayKeys = [];
+  if (dayParam) dayKeys.push(dayParam);
+  else for (let i = days - 1; i >= 0; i--) dayKeys.push(kyivDay(new Date(Date.now() - i * 86400000)));
+
+  const daily = dayKeys.map(dayStr => {
+    const de = byDay[dayStr] || [];
+    const cnt = ev => de.filter(e => e.ev === ev).length;
+    return {
       date: dayStr,
-      visitors: uniq(dayEvents.map(e => e.vid).filter(Boolean)),
-      pageViews: dayEvents.filter(e => e.ev === 'page_view').length,
-      orders: dayEvents.filter(e => e.ev === 'purchase').length
-    });
-  }
+      visitors: uniq(de.map(e => e.vid).filter(Boolean)),
+      sessions: uniq(de.map(e => e.sid).filter(Boolean)),
+      pageViews: cnt('page_view'),
+      productViews: cnt('product_view'),
+      phoneClicks: cnt('phone_click'),
+      viberClicks: cnt('viber_click'),
+      addToCart: cnt('add_to_cart'),
+      orders: cnt('purchase')
+    };
+  });
 
   res.json({
-    days,
+    days, date: dayParam,
     totals: {
       visitors: uniq(events.map(e => e.vid).filter(Boolean)),
       sessions: uniq(events.map(e => e.sid).filter(Boolean)),
