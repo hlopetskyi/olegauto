@@ -391,15 +391,12 @@
 
       <!-- PRODUCTS -->
       <div class="an-panel" id="an-panel-products">
-        <div class="an-grid2">
-          <div class="card">
-            <div class="card-title"><span><i class="fas fa-fire" style="color:var(--red);margin-right:8px"></i>Найпопулярніші товари</span></div>
-            <div id="anTopProducts"></div>
+        <div class="card">
+          <div class="card-title">
+            <span><i class="fas fa-list" style="color:var(--blue);margin-right:8px"></i><span id="anAllTitle">Переглянуті товари</span></span>
+            <span id="anAllCount" style="font-size:13px;font-weight:400;color:var(--gray-500)"></span>
           </div>
-          <div class="card">
-            <div class="card-title"><span><i class="fas fa-list" style="color:var(--blue);margin-right:8px"></i>Усі переглянуті товари</span><span id="anAllCount" style="font-size:13px;font-weight:400;color:var(--gray-500)"></span></div>
-            <div id="anAllProducts" style="max-height:460px;overflow-y:auto"></div>
-          </div>
+          <div id="anAllProducts" style="max-height:560px;overflow-y:auto"></div>
         </div>
       </div>
     </div>
@@ -1963,7 +1960,6 @@ async function loadAnalytics() {
     renderAnDailyTable(d.daily);
     renderAnFunnel(d.funnel);
     renderAnDevice(d.device);
-    renderAnTop(d.topProducts);
     renderAnAll(d.allViewedProducts || []);
   } catch (e) {
     empty.style.display = 'block'; content.style.display = 'none';
@@ -2070,24 +2066,22 @@ function renderAnDevice(device) {
       <div class="an-dev-bar"><div class="an-dev-fill" style="width:${dPct}%;background:var(--blue)"></div></div>
       <div style="width:78px;text-align:right;font-weight:700;font-size:13px">${device.desktop} (${dPct}%)</div></div>`;
 }
-function renderAnTop(top) {
-  const el = document.getElementById('anTopProducts');
-  if (!top.length) { el.innerHTML = '<div style="color:var(--gray-400);text-align:center;padding:20px">Ще немає переглядів товарів</div>'; return; }
-  el.innerHTML = top.map((p, i) =>
-    `<div class="an-top-row an-clickable" onclick="openProductPreview(${p.pid})" title="Відкрити оголошення">
-      <div class="an-top-rank">${i + 1}</div>
-      <div class="an-top-name">${p.name || ('#' + p.pid)}</div>
-      <div class="an-top-count">${p.count} <span style="font-weight:400;color:var(--gray-400);font-size:12px">переглядів</span></div>
-    </div>`).join('');
-}
+// Товари, які реально відкривали за вибраний період (або за один день)
 function renderAnAll(all) {
   const el = document.getElementById('anAllProducts');
+  const title = document.getElementById('anAllTitle');
+  title.textContent = _anDate
+    ? `Переглянуті товари за ${new Date(_anDate).toLocaleDateString('uk-UA')}`
+    : `Переглянуті товари за ${_anDays} днів`;
   document.getElementById('anAllCount').textContent = all.length ? `${all.length} товар${pluralUaAdmin(all.length)}` : '';
-  if (!all.length) { el.innerHTML = '<div style="color:var(--gray-400);text-align:center;padding:20px">Ще немає переглядів товарів</div>'; return; }
+  if (!all.length) {
+    el.innerHTML = '<div style="color:var(--gray-400);text-align:center;padding:20px">У цей період товарів не відкривали</div>';
+    return;
+  }
   el.innerHTML = all.map((p) =>
     `<div class="an-top-row an-clickable" onclick="openProductPreview(${p.pid})" title="Відкрити оголошення">
       <div class="an-top-name">${p.name || ('#' + p.pid)}</div>
-      <div class="an-top-count">${p.count}</div>
+      <div class="an-top-count">${p.count} <span style="font-weight:400;color:var(--gray-400);font-size:12px">переглядів</span></div>
     </div>`).join('');
 }
 function pluralUaAdmin(n){ if(n%10===1&&n%100!==11)return ''; if(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))return 'и'; return 'ів'; }

@@ -925,7 +925,6 @@ app.get('/api/analytics', dynamicAdminAuth, (req, res) => {
     }
   }
   const allViewedProducts = Object.values(prodCounts).sort((a, b) => b.count - a.count);
-  const topProducts = allViewedProducts.slice(0, 10);
 
   // Denna serie: одна точка на кожен календарний день (київський час)
   const byDay = {};
@@ -972,7 +971,6 @@ app.get('/api/analytics', dynamicAdminAuth, (req, res) => {
       { stage: 'Перейшли до оформлення', sessions: sessionsWith('begin_checkout') },
       { stage: 'Оформили замовлення', sessions: sessionsWith('purchase') }
     ],
-    topProducts,
     allViewedProducts,
     daily
   });
