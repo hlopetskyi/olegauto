@@ -5,17 +5,16 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 
 // Каталог даних можна винести за межі коду — зручно для деплою й для тестів.
-const DATA_DIR = process.env.SKLAD_DATA_DIR
-  ? path.resolve(process.env.SKLAD_DATA_DIR)
-  : path.join(__dirname, 'data');
+const DATA_DIR_ENV = process.env.INVENTA_DATA_DIR || process.env.SKLAD_DATA_DIR;
+const DATA_DIR = DATA_DIR_ENV ? path.resolve(DATA_DIR_ENV) : path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const DB_FILE = path.join(DATA_DIR, 'sklad.db');
 
-/* Копія бази при кожному старті. Склад — єдине джерело правди про залишки,
+/* Копія бази при кожному старті. Inventa — єдине джерело правди про залишки,
    і відкотитись має бути на що. Тримаємо останні 10 копій. */
 function backupOnStart() {
-  if (!fs.existsSync(DB_FILE) || process.env.SKLAD_NO_BACKUP === '1') return;
+  if (!fs.existsSync(DB_FILE) || (process.env.INVENTA_NO_BACKUP || process.env.SKLAD_NO_BACKUP) === '1') return;
   const dir = path.join(DATA_DIR, 'backups');
   fs.mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -24,9 +23,13 @@ function backupOnStart() {
     const tmp = new Database(DB_FILE);
     tmp.pragma('wal_checkpoint(TRUNCATE)');
     tmp.close();
-    fs.copyFileSync(DB_FILE, path.join(dir, `sklad-${stamp}.db`));
-    fs.readdirSync(dir).filter((f) => f.endsWith('.db')).sort().slice(0, -10)
-      .forEach((f) => fs.unlinkSync(path.join(dir, f)));
+    fs.copyFileSync(DB_FILE, path.join(dir, `inventa-${stamp}.db`));
+    // Прибираємо зайві копії за часом, а не за назвою: після перейменування
+    // додатка в каталозі можуть лежати файли зі старим префіксом.
+    fs.readdirSync(dir).filter((f) => f.endsWith('.db'))
+      .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => a.t - b.t).slice(0, -10)
+      .forEach(({ f }) => fs.unlinkSync(path.join(dir, f)));
   } catch (e) {
     console.error('Не вдалося зробити резервну копію бази:', e.message);
   }

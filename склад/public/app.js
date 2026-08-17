@@ -79,7 +79,8 @@ function renderLogin() {
   $('#topbar').hidden = true;
   app.innerHTML = `
     <div class="card" style="max-width:380px;margin:12vh auto">
-      <h1>Складський облік</h1>
+      <h1>Inventa</h1>
+      <p class="muted small">Складський облік зі штрих-кодами.</p>
       <p class="muted small">Введіть пароль доступу.</p>
       <form id="loginForm">
         <label class="field"><span>Пароль</span><input type="password" id="pw" autofocus></label>
@@ -1668,7 +1669,7 @@ async function viewIntegrations() {
     <div class="card">
       <div class="row"><h1 class="grow">Інтеграції</h1>
         <button class="primary sm" id="add">＋ Підключити сервіс</button></div>
-      <p class="muted small">Склад — самостійний додаток. Будь-який магазин чи CRM під'єднується сюди
+      <p class="muted small">Inventa — самостійний додаток. Будь-який магазин чи CRM під'єднується сюди
         через API-ключ і не має доступу ні до чого іншого. Ключ можна відкликати в один клік.</p>
       ${list.length ? list.map((i) => `
         <div class="card" style="background:var(--panel-2)">
@@ -1719,7 +1720,7 @@ curl -H "X-Api-Key: sk_..." "${origin}/api/v1/locate?code=7700123456"</pre>
       <form id="f">
         <label class="field"><span>Назва *</span><input id="name" placeholder="напр. Магазин olegavto" required></label>
         <label class="field"><span>Код (латиницею) *</span><input id="slug" placeholder="olegavto" required pattern="[a-z0-9_-]+"></label>
-        <label class="field"><span>Webhook URL (не обов'язково)</span><input id="webhook_url" placeholder="https://…/hooks/sklad"></label>
+        <label class="field"><span>Webhook URL (не обов'язково)</span><input id="webhook_url" placeholder="https://…/hooks/inventa"></label>
         <div class="row"><button class="primary grow">Створити і видати ключ</button>
           <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
       </form>`);

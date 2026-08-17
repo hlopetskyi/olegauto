@@ -1,4 +1,4 @@
-# Складський облік
+# Inventa
 
 Веб-додаток для складського обліку товарів зі штрих-кодами. Самостійний продукт: працює сам по собі,
 а будь-який магазин чи CRM (у тому числі olegavto.com) підключається до нього збоку через API-ключ.
@@ -50,7 +50,7 @@ npm install
 Запустити:
 
 ```bash
-SKLAD_PASSWORD=ваш_пароль SKLAD_SECRET=довгий_випадковий_рядок npm start
+INVENTA_PASSWORD=ваш_пароль INVENTA_SECRET=довгий_випадковий_рядок npm start
 ```
 
 Відкрити http://localhost:3200
@@ -60,16 +60,17 @@ SKLAD_PASSWORD=ваш_пароль SKLAD_SECRET=довгий_випадкови�
 | Змінна | Призначення | За замовчуванням |
 |---|---|---|
 | `PORT` | порт | `3200` |
-| `SKLAD_PASSWORD` | пароль для входу | `sklad` |
-| `SKLAD_SECRET` | ключ підпису сесій | `change-me-in-production` |
-| `SKLAD_DATA_DIR` | де лежить база | `./data` |
+| `INVENTA_PASSWORD` | пароль для входу | `inventa` |
+| `INVENTA_SECRET` | ключ підпису сесій | `change-me-in-production` |
+| `INVENTA_DATA_DIR` | де лежить база | `./data` |
 
-**Обов'язково задайте свої `SKLAD_PASSWORD` і `SKLAD_SECRET` перед тим, як виставляти додаток
+**Обов'язково задайте свої `INVENTA_PASSWORD` і `INVENTA_SECRET` перед тим, як виставляти додаток
 в інтернет.** Зі значеннями за замовчуванням увійти зможе будь-хто, хто знає адресу.
 
 База даних — файл `data/sklad.db` (SQLite). Резервна копія = звичайне копіювання цього файлу.
 При кожному запуску додаток сам кладе копію бази в `data/backups/` і тримає останні 10.
-Каталог даних можна винести в інше місце змінною `SKLAD_DATA_DIR`.
+Каталог даних можна винести в інше місце змінною `INVENTA_DATA_DIR`.
+Старі назви змінних із префіксом `SKLAD_` теж працюють.
 
 ---
 
@@ -147,7 +148,7 @@ SKLAD_PASSWORD=ваш_пароль SKLAD_SECRET=довгий_випадкови�
 
 ## Інтеграція з магазином
 
-Склад не знає нічого про конкретний магазин. Магазин сам ходить у API складу з ключем.
+Inventa не знає нічого про конкретний магазин. Магазин сам ходить у API з ключем.
 
 1. Вкладка **Інтеграції** → **＋ Підключити сервіс** → вказати назву й код (наприклад `olegavto`).
 2. Скопіювати виданий ключ `sk_…` — це і є доступ.
@@ -159,7 +160,7 @@ SKLAD_PASSWORD=ваш_пароль SKLAD_SECRET=довгий_випадкови�
 
 ```bash
 curl -H "X-Api-Key: sk_..." \
-  "https://sklad.example.com/api/v1/products/lookup?sku=7700274177"
+  "https://inventa.example.com/api/v1/products/lookup?sku=7700274177"
 ```
 
 Наявність для списку товарів (для сторінки каталогу):
@@ -167,7 +168,7 @@ curl -H "X-Api-Key: sk_..." \
 ```bash
 curl -X POST -H "X-Api-Key: sk_..." -H "Content-Type: application/json" \
   -d '{"items":[{"sku":"7700274177"},{"external_id":"42"}]}' \
-  https://sklad.example.com/api/v1/stock/check
+  https://inventa.example.com/api/v1/stock/check
 ```
 
 Списати при продажу:
@@ -175,7 +176,7 @@ curl -X POST -H "X-Api-Key: sk_..." -H "Content-Type: application/json" \
 ```bash
 curl -X POST -H "X-Api-Key: sk_..." -H "Content-Type: application/json" \
   -d '{"sku":"7700274177","qty":1,"note":"замовлення №123"}' \
-  https://sklad.example.com/api/v1/stock/out
+  https://inventa.example.com/api/v1/stock/out
 ```
 
 Прив'язати товар магазину до товару складу (щоб надалі шукати за `external_id`):
@@ -183,7 +184,7 @@ curl -X POST -H "X-Api-Key: sk_..." -H "Content-Type: application/json" \
 ```bash
 curl -X POST -H "X-Api-Key: sk_..." -H "Content-Type: application/json" \
   -d '{"sku":"7700274177","external_id":"42","external_url":"https://olegavto.com/p/42"}' \
-  https://sklad.example.com/api/v1/products/link
+  https://inventa.example.com/api/v1/products/link
 ```
 
 ### Повний перелік ендпоінтів v1

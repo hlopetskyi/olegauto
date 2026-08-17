@@ -9,8 +9,9 @@ const S = require('./lib/store');
 const v1 = require('./routes/v1');
 
 const PORT = process.env.PORT || 3200;
-const PASSWORD = process.env.SKLAD_PASSWORD || 'sklad';
-const SESSION_SECRET = process.env.SKLAD_SECRET || 'change-me-in-production';
+// Старий префікс SKLAD_ лишаємо робочим, щоб уже налаштовані запуски не зламались.
+const PASSWORD = process.env.INVENTA_PASSWORD || process.env.SKLAD_PASSWORD || 'inventa';
+const SESSION_SECRET = process.env.INVENTA_SECRET || process.env.SKLAD_SECRET || 'change-me-in-production';
 
 const app = express();
 app.disable('x-powered-by');
@@ -33,21 +34,21 @@ const validToken = (t) => {
 
 app.post('/api/login', (req, res) => {
   if (req.body?.password !== PASSWORD) return res.status(401).json({ error: 'Невірний пароль' });
-  res.cookie('sklad_session', makeToken(), {
+  res.cookie('inventa_session', makeToken(), {
     httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 3600 * 1000,
   });
   res.json({ ok: true });
 });
 
 app.post('/api/logout', (req, res) => {
-  res.clearCookie('sklad_session');
+  res.clearCookie('inventa_session');
   res.json({ ok: true });
 });
 
-app.get('/api/me', (req, res) => res.json({ authed: validToken(req.cookies?.sklad_session) }));
+app.get('/api/me', (req, res) => res.json({ authed: validToken(req.cookies?.inventa_session) }));
 
 function requireAuth(req, res, next) {
-  if (!validToken(req.cookies?.sklad_session)) return res.status(401).json({ error: 'Не авторизовано' });
+  if (!validToken(req.cookies?.inventa_session)) return res.status(401).json({ error: 'Не авторизовано' });
   next();
 }
 
@@ -170,6 +171,6 @@ Object.entries(vendor).forEach(([url, file]) => {
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {
-  console.log(`Склад запущено: http://localhost:${PORT}`);
-  if (PASSWORD === 'sklad') console.log('УВАГА: стоїть пароль за замовчуванням. Задайте SKLAD_PASSWORD.');
+  console.log(`Inventa запущена: http://localhost:${PORT}`);
+  if (PASSWORD === 'inventa') console.log('УВАГА: стоїть пароль за замовчуванням. Задайте INVENTA_PASSWORD.');
 });
