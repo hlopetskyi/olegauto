@@ -122,6 +122,17 @@ api.post('/categories', wrap((req) => S.createCategory(req.body)));
 api.put('/categories/:id', wrap((req) => S.updateCategory(id(req), req.body)));
 api.delete('/categories/:id', wrap((req) => (S.deleteCategory(id(req)), { ok: true })));
 
+// поля, які категорія додає у форму товару
+api.get('/categories/:id/fields', wrap((req) => ({
+  own: S.listCategoryFields(id(req)),
+  effective: S.effectiveFields(id(req)),
+})));
+api.post('/categories/:id/fields', wrap((req) => S.createField(id(req), req.body)));
+api.post('/categories/:id/apply-preset', wrap((req) => S.applyPreset(id(req), req.body.preset)));
+api.put('/fields/:id', wrap((req) => S.updateField(id(req), req.body)));
+api.delete('/fields/:id', wrap((req) => (S.deleteField(id(req)), { ok: true })));
+api.get('/field-presets', wrap(() => S.listPresets()));
+
 // рух товару
 api.post('/stock/in', wrap((req) => S.stockIn(+req.body.product_id, +req.body.location_id, +req.body.qty, req.body.note)));
 api.post('/stock/out', wrap((req) => S.stockOut(+req.body.product_id, +req.body.location_id, +req.body.qty, req.body.note)));

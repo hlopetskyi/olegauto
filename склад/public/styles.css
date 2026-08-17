@@ -298,3 +298,12 @@ tbody tr:hover { background: var(--panel-2); }
   .card { padding: 12px; }
   #scanInput { font-size: 18px; }
 }
+
+/* ------------------------------------------- поля категорії в картці */
+
+.attrs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.attr {
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 4px 9px; font-size: 13px;
+}
+.attr em { color: var(--muted); font-style: normal; margin-right: 6px; font-size: 12px; }

@@ -229,11 +229,16 @@ function productCardHtml(p) {
       <div class="grow">
         <h1>${esc(p.name)} ${qtyBadge}</h1>
         <div class="muted small">
-          ${p.category_name ? `<span class="badge">${esc(p.category_parent_name ? p.category_parent_name + ' → ' : '')}${esc(p.category_name)}</span> · ` : ''}
-          ${p.code ? `Артикул: <b class="mono">${esc(p.code)}</b> · ` : ''}
-          ${p.oem ? `OEM: <b class="mono">${esc(p.oem)}</b> · ` : ''}
-          ${[p.brand, p.car_make, p.car_model].filter(Boolean).map(esc).join(' · ')}
+          ${[
+            p.category_name
+              ? `<span class="badge">${esc(p.category_parent_name ? p.category_parent_name + ' → ' : '')}${esc(p.category_name)}</span>`
+              : '',
+            p.code ? `Артикул: <b class="mono">${esc(p.code)}</b>` : '',
+            p.price ? `Ціна: <b>${esc(p.price)}</b>` : '',
+          ].filter(Boolean).join(' · ')}
         </div>
+        ${p.attributes && p.attributes.length ? `<div class="attrs">${p.attributes.map((a) => `
+          <span class="attr"><em>${esc(a.label)}</em>${esc(a.type === 'checkbox' ? (a.value === '1' ? 'так' : 'ні') : a.value)}</span>`).join('')}</div>` : ''}
         ${p.note ? `<p class="small">${esc(p.note)}</p>` : ''}
       </div>
       <div style="text-align:center">
@@ -571,8 +576,10 @@ async function viewCategories() {
         <h1 class="grow">Категорії товарів</h1>
         <button class="primary" id="add">＋ Категорія</button>
       </div>
-      <p class="muted small">Категорії описують, що це за товар. Додаток не прив'язаний до автозапчастин —
-        під інший бізнес просто заводите свої категорії. Всередині категорії можна створити підкатегорії.</p>
+      <p class="muted small">Категорія визначає не лише «що це за товар», а й <b>які поля буде заповнено
+        при створенні товару</b>. Для автозапчастин це OEM-номер і модель авто, для продуктів —
+        термін придатності й партія. Натисніть <b>⚙ Поля товару</b> в потрібній категорії.
+        Підкатегорії успадковують поля батьківської.</p>
     </div>
     <div class="card">
       ${roots.length ? roots.map((r) => {
@@ -581,23 +588,157 @@ async function viewCategories() {
           <div class="row">
             <div class="grow"><h3><a href="#/products?category=${r.id}">${esc(r.name)}</a>
               <span class="badge">${r.products_count} товарів</span></h3></div>
+            <button class="sm" data-fields="${r.id}">⚙ Поля товару</button>
             <button class="sm ghost" data-add-child="${r.id}">＋ підкатегорія</button>
             <button class="sm ghost" data-edit="${r.id}">Змінити</button>
           </div>
           ${kids.length ? `<div class="table-wrap"><table><tbody>${kids.map((k) => `<tr>
             <td>└ <a href="#/products?category=${k.id}">${esc(k.name)}</a></td>
             <td><span class="badge">${k.products_count}</span></td>
-            <td class="nowrap"><button class="sm ghost" data-edit="${k.id}">Змінити</button></td>
+            <td class="nowrap">
+              <button class="sm" data-fields="${k.id}">⚙ Поля</button>
+              <button class="sm ghost" data-edit="${k.id}">Змінити</button>
+            </td>
           </tr>`).join('')}</tbody></table></div>` : ''}
         </div>`;
       }).join('') : '<p class="muted">Категорій ще немає. Створіть першу.</p>'}
     </div>`;
 
   $('#add').addEventListener('click', () => dlgCategory(null, cats));
+  app.querySelectorAll('[data-fields]').forEach((b) =>
+    b.addEventListener('click', () => dlgFields(Number(b.dataset.fields), cats)));
   app.querySelectorAll('[data-edit]').forEach((b) =>
     b.addEventListener('click', () => dlgCategory(cats.find((c) => c.id === Number(b.dataset.edit)), cats)));
   app.querySelectorAll('[data-add-child]').forEach((b) =>
     b.addEventListener('click', () => dlgCategory({ parent_id: Number(b.dataset.addChild) }, cats)));
+}
+
+const FIELD_TYPES = {
+  text: 'Текст',
+  textarea: 'Довгий текст',
+  number: 'Число',
+  date: 'Дата',
+  select: 'Вибір зі списку',
+  checkbox: 'Так / ні',
+};
+
+// Редактор полів категорії: саме тут бізнес описує, що потрібно знати про його товар.
+async function dlgFields(categoryId, cats) {
+  const cat = cats.find((c) => c.id === categoryId);
+  const [{ own, effective }, presets] = await Promise.all([
+    api(`/categories/${categoryId}/fields`),
+    api('/field-presets'),
+  ]);
+  const inherited = effective.filter((f) => f.inherited);
+
+  const bg = modal(`
+    <h2>Поля товару — «${esc(cat?.name ?? '')}»</h2>
+    <p class="small muted">Ці поля з'являться у формі створення товару цієї категорії.
+      Основні поля (назва, артикул, кількість, ціна, місце) є завжди й тут не налаштовуються.</p>
+
+    ${inherited.length ? `<div class="hint">Успадковано від «${esc(inherited[0].from_category)}»:
+      ${inherited.map((f) => esc(f.label)).join(', ')}. Змінюються в тій категорії.</div>` : ''}
+
+    <div id="fieldList"></div>
+
+    <div class="row" style="margin-top:12px">
+      <button class="primary sm" id="addField">＋ Додати поле</button>
+      <select id="preset" class="grow">
+        <option value="">Готовий набір полів…</option>
+        ${presets.map((p) => `<option value="${p.key}">${esc(p.name)}: ${esc(p.fields.join(', '))}</option>`).join('')}
+      </select>
+      <button class="sm" id="applyPreset">Застосувати</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="ghost right" onclick="this.closest('.modal-bg').remove()">Закрити</button>
+    </div>`);
+
+  const listBox = bg.querySelector('#fieldList');
+
+  const renderList = (fields) => {
+    listBox.innerHTML = fields.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Поле</th><th>Тип</th><th>Обов'язкове</th><th></th></tr></thead>
+      <tbody>${fields.map((f) => `<tr>
+        <td><b>${esc(f.label)}</b>${f.options.length ? `<div class="small muted">${esc(f.options.join(' · '))}</div>` : ''}</td>
+        <td class="small">${esc(FIELD_TYPES[f.type] || f.type)}</td>
+        <td>${f.required ? '<span class="badge warn">так</span>' : '<span class="muted small">ні</span>'}</td>
+        <td class="nowrap">
+          <button class="sm ghost" data-ef="${f.id}">✎</button>
+          <button class="sm danger" data-df="${f.id}">✕</button>
+        </td>
+      </tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Власних полів ще немає.</p>';
+
+    listBox.querySelectorAll('[data-df]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Видалити поле? Значення цього поля в усіх товарах теж зникнуть.')) return;
+      await api(`/fields/${b.dataset.df}`, { method: 'DELETE' });
+      reload();
+    }));
+    listBox.querySelectorAll('[data-ef]').forEach((b) => b.addEventListener('click', () =>
+      dlgOneField(categoryId, fields.find((f) => f.id === Number(b.dataset.ef)), reload)));
+  };
+
+  const reload = async () => {
+    const fresh = await api(`/categories/${categoryId}/fields`);
+    renderList(fresh.own);
+  };
+
+  renderList(own);
+
+  bg.querySelector('#addField').addEventListener('click', () => dlgOneField(categoryId, null, reload));
+  bg.querySelector('#applyPreset').addEventListener('click', async () => {
+    const key = bg.querySelector('#preset').value;
+    if (!key) return;
+    const res = await api(`/categories/${categoryId}/apply-preset`, { method: 'POST', body: { preset: key } });
+    toast(`Додано полів: ${res.added}`, 'ok');
+    reload();
+  });
+}
+
+function dlgOneField(categoryId, f, onSaved) {
+  const bg = modal(`
+    <h2>${f ? 'Змінити поле' : 'Нове поле'}</h2>
+    <form id="ff">
+      <label class="field"><span>Назва поля *</span>
+        <input id="label" value="${esc(f?.label ?? '')}" placeholder="напр. Термін придатності" required></label>
+      <div class="row">
+        <label class="field grow"><span>Тип</span>
+          <select id="type">${Object.entries(FIELD_TYPES).map(([k, n]) =>
+            `<option value="${k}" ${f?.type === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label class="field grow"><span>Обов'язкове</span>
+          <select id="required">
+            <option value="0" ${!f?.required ? 'selected' : ''}>Ні</option>
+            <option value="1" ${f?.required ? 'selected' : ''}>Так</option>
+          </select></label>
+      </div>
+      <label class="field" id="optWrap" ${f?.type === 'select' ? '' : 'hidden'}>
+        <span>Варіанти вибору — кожен з нового рядка</span>
+        <textarea id="options">${esc((f?.options || []).join('\n'))}</textarea></label>
+      <label class="field"><span>Підказка під полем</span>
+        <input id="hint" value="${esc(f?.hint ?? '')}" placeholder="напр. у форматі 500 г"></label>
+      <div class="row"><button class="primary grow">Зберегти</button>
+        <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
+    </form>`);
+
+  const typeSel = bg.querySelector('#type');
+  typeSel.addEventListener('change', () => { bg.querySelector('#optWrap').hidden = typeSel.value !== 'select'; });
+
+  bg.querySelector('#ff').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      label: bg.querySelector('#label').value,
+      type: typeSel.value,
+      required: Number(bg.querySelector('#required').value),
+      hint: bg.querySelector('#hint').value,
+      options: bg.querySelector('#options').value.split('\n').map((x) => x.trim()).filter(Boolean),
+      sort: f?.sort ?? 0,
+    };
+    try {
+      if (f) await api(`/fields/${f.id}`, { method: 'PUT', body });
+      else await api(`/categories/${categoryId}/fields`, { method: 'POST', body });
+      bg.remove();
+      onSaved();
+    } catch (err) { toast(err.message, 'err'); }
+  });
 }
 
 function dlgCategory(c, cats) {
@@ -637,6 +778,30 @@ function dlgCategory(c, cats) {
   });
 }
 
+// Один рядок форми під одне поле категорії. Значення завжди зберігаємо текстом —
+// тип потрібен лише для того, щоб дати правильний елемент вводу.
+function fieldInputHtml(f, value) {
+  const id = `fv_${f.id}`;
+  const req = f.required ? 'required' : '';
+  const val = esc(value ?? '');
+  let input;
+  if (f.type === 'textarea') input = `<textarea id="${id}" ${req}>${val}</textarea>`;
+  else if (f.type === 'select') {
+    input = `<select id="${id}" ${req}><option value="">—</option>${
+      f.options.map((o) => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  } else if (f.type === 'checkbox') {
+    input = `<input type="checkbox" id="${id}" style="width:auto" ${value === '1' ? 'checked' : ''}>`;
+  } else {
+    const t = f.type === 'number' ? 'number' : (f.type === 'date' ? 'date' : 'text');
+    input = `<input type="${t}" id="${id}" value="${val}" ${req}>`;
+  }
+  return `<label class="field" data-field="${f.id}" data-type="${f.type}">
+    <span>${esc(f.label)}${f.required ? ' *' : ''}${f.inherited ? ` <em class="muted">(з «${esc(f.from_category)}»)</em>` : ''}</span>
+    ${input}
+    ${f.hint ? `<em class="muted small">${esc(f.hint)}</em>` : ''}
+  </label>`;
+}
+
 async function dlgProduct(p) {
   const v = (k) => esc(p?.[k] ?? '');
   const cats = await api('/categories');
@@ -647,22 +812,19 @@ async function dlgProduct(p) {
       <div class="row">
         <label class="field grow"><span>Категорія</span>
           <select id="category_id">${categoryOptions(cats, p?.category_id)}</select></label>
-        <a href="#/categories" class="small" style="padding-bottom:20px">керувати</a>
+        <a href="#/categories" class="small" style="padding-bottom:20px">налаштувати поля</a>
       </div>
       <div class="row">
-        <label class="field grow"><span>Артикул (ваш код)</span><input id="code" value="${v('code')}"></label>
-        <label class="field grow"><span>OEM-номер</span><input id="oem" value="${v('oem')}"></label>
-      </div>
-      <div class="row">
-        <label class="field grow"><span>Виробник</span><input id="brand" value="${v('brand')}"></label>
-        <label class="field grow"><span>Марка авто</span><input id="car_make" value="${v('car_make')}"></label>
-        <label class="field grow"><span>Модель</span><input id="car_model" value="${v('car_model')}"></label>
-      </div>
-      <div class="row">
+        <label class="field grow"><span>Артикул / код</span><input id="code" value="${v('code')}"></label>
         <label class="field grow"><span>Одиниця</span><input id="unit" value="${p?.unit ? esc(p.unit) : 'шт'}"></label>
+      </div>
+      <div class="row">
         <label class="field grow"><span>Мінімальний залишок</span><input type="number" id="min_qty" value="${p?.min_qty ?? 0}"></label>
         <label class="field grow"><span>Ціна</span><input type="number" step="0.01" id="price" value="${p?.price ?? 0}"></label>
       </div>
+
+      <div id="customFields"></div>
+
       <label class="field"><span>Примітка</span><textarea id="note">${v('note')}</textarea></label>
       <div class="row">
         <button class="primary grow">Зберегти</button>
@@ -671,13 +833,43 @@ async function dlgProduct(p) {
       </div>
     </form>`);
 
+  const catSel = bg.querySelector('#category_id');
+  const box = bg.querySelector('#customFields');
+
+  // Поля залежать від обраної категорії, тому перемальовуємо їх при кожній зміні.
+  const loadFields = async () => {
+    const catId = catSel.value;
+    if (!catId) {
+      box.innerHTML = `<p class="small muted">Виберіть категорію — і тут з'являться її поля
+        (наприклад OEM-номер для запчастин або термін придатності для продуктів).</p>`;
+      return;
+    }
+    const { effective } = await api(`/categories/${catId}/fields`);
+    if (!effective.length) {
+      box.innerHTML = `<p class="small muted">У цієї категорії ще немає власних полів.
+        <a href="#/categories">Додати їх</a> — і вони з'являться у формі.</p>`;
+      return;
+    }
+    box.innerHTML = `<h3 class="muted small">Поля категорії</h3>` +
+      effective.map((f) => fieldInputHtml(f, p?.values?.[f.id])).join('');
+  };
+  catSel.addEventListener('change', loadFields);
+  await loadFields();
+
   bg.querySelector('#f').addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = {};
-    ['name', 'code', 'oem', 'brand', 'car_make', 'car_model', 'unit', 'note'].forEach((k) => body[k] = bg.querySelector('#' + k).value);
-    body.category_id = bg.querySelector('#category_id').value || null;
+    ['name', 'code', 'unit', 'note'].forEach((k) => body[k] = bg.querySelector('#' + k).value);
+    body.category_id = catSel.value || null;
     body.min_qty = Number(bg.querySelector('#min_qty').value) || 0;
     body.price = Number(bg.querySelector('#price').value) || 0;
+    body.values = {};
+    box.querySelectorAll('[data-field]').forEach((lab) => {
+      const el = lab.querySelector('input, select, textarea');
+      body.values[lab.dataset.field] = lab.dataset.type === 'checkbox'
+        ? (el.checked ? '1' : '')
+        : el.value;
+    });
     try {
       const saved = p?.id
         ? await api(`/products/${p.id}`, { method: 'PUT', body })

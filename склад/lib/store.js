@@ -322,6 +322,150 @@ const categoryWithChildren = (id) => {
   return [Number(id), ...kids];
 };
 
+/* ------------------------------------------------- поля категорій */
+
+// Ланцюжок «батьківська → дочірня»: поля успадковуються згори вниз.
+function categoryChain(categoryId) {
+  const chain = [];
+  let cur = categoryId ? getCategory(categoryId) : null;
+  let guard = 0;
+  while (cur && guard++ < 10) {
+    chain.unshift(cur);
+    cur = cur.parent_id ? getCategory(cur.parent_id) : null;
+  }
+  return chain;
+}
+
+const parseField = (f) => ({ ...f, options: JSON.parse(f.options || '[]'), required: !!f.required });
+
+// Власні поля однієї категорії.
+const listCategoryFields = (categoryId) =>
+  db.prepare('SELECT * FROM category_fields WHERE category_id = ? ORDER BY sort, id').all(categoryId).map(parseField);
+
+// Усі поля, що діють на товар цієї категорії: свої + успадковані від батьківської.
+function effectiveFields(categoryId) {
+  if (!categoryId) return [];
+  return categoryChain(categoryId).flatMap((c) =>
+    listCategoryFields(c.id).map((f) => ({ ...f, from_category: c.name, inherited: c.id !== Number(categoryId) })));
+}
+
+const createField = (categoryId, { label, type = 'text', options = [], required = 0, sort = null, hint = '' }) => {
+  const nextSort = sort === null
+    ? (db.prepare('SELECT COALESCE(MAX(sort), -1) + 1 AS s FROM category_fields WHERE category_id = ?').get(categoryId).s)
+    : sort;
+  const info = db.prepare(`
+    INSERT INTO category_fields(category_id, label, type, options, required, sort, hint)
+    VALUES(?, ?, ?, ?, ?, ?, ?)
+  `).run(categoryId, label, type, JSON.stringify(options || []), required ? 1 : 0, nextSort, hint);
+  return parseField(db.prepare('SELECT * FROM category_fields WHERE id = ?').get(info.lastInsertRowid));
+};
+
+const updateField = (id, { label, type = 'text', options = [], required = 0, sort = 0, hint = '' }) => {
+  db.prepare(`
+    UPDATE category_fields SET label = ?, type = ?, options = ?, required = ?, sort = ?, hint = ? WHERE id = ?
+  `).run(label, type, JSON.stringify(options || []), required ? 1 : 0, sort | 0, hint, id);
+  return parseField(db.prepare('SELECT * FROM category_fields WHERE id = ?').get(id));
+};
+
+// Разом з полем зникають і всі його значення — це каскад у схемі.
+const deleteField = (id) => db.prepare('DELETE FROM category_fields WHERE id = ?').run(id);
+
+/**
+ * Готові набори полів під типові бізнеси — щоб не описувати все руками.
+ * Це лише стартові заготовки: після застосування поля звичайні, їх можна міняти.
+ */
+const FIELD_PRESETS = {
+  auto: {
+    name: 'Автозапчастини',
+    fields: [
+      { label: 'OEM-номер', type: 'text' },
+      { label: 'Марка авто', type: 'text' },
+      { label: 'Модель авто', type: 'text' },
+      { label: 'Рік від', type: 'number' },
+      { label: 'Рік до', type: 'number' },
+      { label: 'Стан', type: 'select', options: ['Нова', 'Б/в', 'Відновлена'] },
+    ],
+  },
+  food: {
+    name: 'Продукти харчування',
+    fields: [
+      { label: 'Термін придатності до', type: 'date' },
+      { label: 'Номер партії', type: 'text' },
+      { label: 'Вага / об’єм', type: 'text', hint: 'напр. 500 г, 1 л' },
+      { label: 'Умови зберігання', type: 'select', options: ['Кімнатна', 'Холодильник', 'Морозильник'] },
+      { label: 'Виробник', type: 'text' },
+    ],
+  },
+  clothes: {
+    name: 'Одяг і взуття',
+    fields: [
+      { label: 'Розмір', type: 'text' },
+      { label: 'Колір', type: 'text' },
+      { label: 'Матеріал', type: 'text' },
+      { label: 'Стать', type: 'select', options: ['Чоловіче', 'Жіноче', 'Унісекс', 'Дитяче'] },
+      { label: 'Сезон', type: 'select', options: ['Літо', 'Зима', 'Демісезон'] },
+    ],
+  },
+  electronics: {
+    name: 'Електроніка',
+    fields: [
+      { label: 'Серійний номер', type: 'text' },
+      { label: 'Гарантія, міс', type: 'number' },
+      { label: 'Модель', type: 'text' },
+      { label: 'Комплектність', type: 'textarea' },
+    ],
+  },
+  building: {
+    name: 'Будматеріали',
+    fields: [
+      { label: 'Розмір / габарит', type: 'text' },
+      { label: 'Вага, кг', type: 'number' },
+      { label: 'Матеріал', type: 'text' },
+      { label: 'Клас / марка', type: 'text' },
+    ],
+  },
+};
+
+const listPresets = () => Object.entries(FIELD_PRESETS).map(([key, v]) => ({
+  key, name: v.name, fields: v.fields.map((f) => f.label),
+}));
+
+// Додає поля набору, пропускаючи ті, що вже є з такою назвою.
+const applyPreset = db.transaction((categoryId, presetKey) => {
+  const preset = FIELD_PRESETS[presetKey];
+  if (!preset) throw new Error('Невідомий набір полів');
+  const existing = new Set(listCategoryFields(categoryId).map((f) => f.label.toLowerCase()));
+  let added = 0;
+  preset.fields.forEach((f) => {
+    if (existing.has(f.label.toLowerCase())) return;
+    createField(categoryId, f);
+    added++;
+  });
+  return { added, fields: listCategoryFields(categoryId) };
+});
+
+const productValues = (productId) => {
+  const rows = db.prepare('SELECT field_id, value FROM product_values WHERE product_id = ?').all(productId);
+  return Object.fromEntries(rows.map((r) => [r.field_id, r.value]));
+};
+
+// Пишемо тільки ті поля, що справді діють на цю категорію — щоб у базі
+// не осідали значення від категорії, з якої товар уже переїхав.
+const saveProductValues = db.transaction((productId, categoryId, values = {}) => {
+  const allowed = new Set(effectiveFields(categoryId).map((f) => f.id));
+  db.prepare(allowed.size
+    ? `DELETE FROM product_values WHERE product_id = ? AND field_id NOT IN (${[...allowed].join(',')})`
+    : 'DELETE FROM product_values WHERE product_id = ?').run(productId);
+  const ins = db.prepare('INSERT OR REPLACE INTO product_values(product_id, field_id, value) VALUES(?, ?, ?)');
+  const del = db.prepare('DELETE FROM product_values WHERE product_id = ? AND field_id = ?');
+  Object.entries(values || {}).forEach(([fid, val]) => {
+    const id = Number(fid);
+    if (!allowed.has(id)) return;
+    if (val === '' || val === null || val === undefined) del.run(productId, id);
+    else ins.run(productId, id, String(val));
+  });
+});
+
 /* -------------------------------------------------------------- products */
 
 const productRow = (id) => db.prepare(`
@@ -356,37 +500,45 @@ function productFull(id) {
       FROM product_links pl JOIN integrations i ON i.id = pl.integration_id
      WHERE pl.product_id = ?
   `).all(id);
+  const fields = effectiveFields(product.category_id);
+  const values = productValues(id);
   return {
     ...product,
     total_qty: placements.reduce((s, p) => s + p.qty, 0),
     placements,
     links,
+    fields,
+    values,
+    // Готовий до показу список «підпис → значення», без порожніх.
+    attributes: fields
+      .map((f) => ({ label: f.label, type: f.type, value: values[f.id] ?? '' }))
+      .filter((a) => a.value !== ''),
   };
 }
 
-const createProduct = (p) => {
+const createProduct = db.transaction((p) => {
   const info = db.prepare(`
-    INSERT INTO products(barcode, code, oem, name, brand, category_id, car_make, car_model, unit, min_qty, price, note)
-    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO products(barcode, code, name, category_id, unit, min_qty, price, note)
+    VALUES(?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    p.barcode || newProductBarcode(), p.code || '', p.oem || '', p.name, p.brand || '',
-    p.category_id || null, p.car_make || '', p.car_model || '', p.unit || 'шт',
-    p.min_qty || 0, p.price || 0, p.note || ''
+    p.barcode || newProductBarcode(), p.code || '', p.name, p.category_id || null,
+    p.unit || 'шт', p.min_qty || 0, p.price || 0, p.note || ''
   );
+  saveProductValues(info.lastInsertRowid, p.category_id || null, p.values);
   return productFull(info.lastInsertRowid);
-};
+});
 
-const updateProduct = (id, p) => {
+const updateProduct = db.transaction((id, p) => {
   db.prepare(`
-    UPDATE products SET code = ?, oem = ?, name = ?, brand = ?, category_id = ?,
-                        car_make = ?, car_model = ?, unit = ?, min_qty = ?, price = ?, note = ?
+    UPDATE products SET code = ?, name = ?, category_id = ?, unit = ?, min_qty = ?, price = ?, note = ?
      WHERE id = ?
   `).run(
-    p.code || '', p.oem || '', p.name, p.brand || '', p.category_id || null,
-    p.car_make || '', p.car_model || '', p.unit || 'шт', p.min_qty || 0, p.price || 0, p.note || '', id
+    p.code || '', p.name, p.category_id || null, p.unit || 'шт',
+    p.min_qty || 0, p.price || 0, p.note || '', id
   );
+  saveProductValues(id, p.category_id || null, p.values);
   return productFull(id);
-};
+});
 
 const deleteProduct = (id) => db.prepare('DELETE FROM products WHERE id = ?').run(id);
 
@@ -395,8 +547,10 @@ function searchProducts({ q = '', limit = 100, offset = 0, lowStock = false, cat
   const where = [];
   const args = [];
   if (q.trim()) {
-    where.push('(p.name LIKE ? OR p.code LIKE ? OR p.oem LIKE ? OR p.barcode LIKE ? OR p.brand LIKE ? OR p.car_model LIKE ?)');
-    args.push(like, like, like, like, like, like);
+    // Пошук іде і по власних полях категорії — інакше не знайти за OEM чи серійним номером.
+    where.push(`(p.name LIKE ? OR p.code LIKE ? OR p.barcode LIKE ?
+                 OR EXISTS (SELECT 1 FROM product_values v WHERE v.product_id = p.id AND v.value LIKE ?))`);
+    args.push(like, like, like, like);
   }
   if (uncategorized) {
     where.push('p.category_id IS NULL');
@@ -603,6 +757,8 @@ module.exports = {
   listLocations, createLocation, updateLocation, deleteLocation, locationFull, locationContents,
   searchProducts, productFull, createProduct, updateProduct, deleteProduct, productPlacements,
   listCategories, getCategory, createCategory, updateCategory, deleteCategory,
+  listCategoryFields, effectiveFields, createField, updateField, deleteField,
+  listPresets, applyPreset, productValues,
   stockIn, stockOut, stockMove, stockAdjust, getQty, totalQty, listMovements,
   resolveCode,
   listIntegrations, createIntegration, updateIntegration, rotateIntegrationKey, deleteIntegration,

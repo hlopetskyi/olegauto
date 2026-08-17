@@ -4,10 +4,36 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
-const DATA_DIR = path.join(__dirname, 'data');
+// Каталог даних можна винести за межі коду — зручно для деплою й для тестів.
+const DATA_DIR = process.env.SKLAD_DATA_DIR
+  ? path.resolve(process.env.SKLAD_DATA_DIR)
+  : path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new Database(path.join(DATA_DIR, 'sklad.db'));
+const DB_FILE = path.join(DATA_DIR, 'sklad.db');
+
+/* Копія бази при кожному старті. Склад — єдине джерело правди про залишки,
+   і відкотитись має бути на що. Тримаємо останні 10 копій. */
+function backupOnStart() {
+  if (!fs.existsSync(DB_FILE) || process.env.SKLAD_NO_BACKUP === '1') return;
+  const dir = path.join(DATA_DIR, 'backups');
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  try {
+    // Проста копія головного файлу; перед нею скидаємо WAL, щоб копія була цілісною.
+    const tmp = new Database(DB_FILE);
+    tmp.pragma('wal_checkpoint(TRUNCATE)');
+    tmp.close();
+    fs.copyFileSync(DB_FILE, path.join(dir, `sklad-${stamp}.db`));
+    fs.readdirSync(dir).filter((f) => f.endsWith('.db')).sort().slice(0, -10)
+      .forEach((f) => fs.unlinkSync(path.join(dir, f)));
+  } catch (e) {
+    console.error('Не вдалося зробити резервну копію бази:', e.message);
+  }
+}
+backupOnStart();
+
+const db = new Database(DB_FILE);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -73,6 +99,30 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id);
+
+-- Поля, які категорія додає до форми товару. Саме тут живе специфіка бізнесу:
+-- автозапчастини мають OEM і модель авто, продукти — термін придатності й партію.
+-- type: text | textarea | number | date | select | checkbox
+CREATE TABLE IF NOT EXISTS category_fields (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  label       TEXT NOT NULL,
+  type        TEXT NOT NULL DEFAULT 'text',
+  options     TEXT DEFAULT '[]',
+  required    INTEGER NOT NULL DEFAULT 0,
+  sort        INTEGER NOT NULL DEFAULT 0,
+  hint        TEXT DEFAULT '',
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_fields_cat ON category_fields(category_id);
+
+CREATE TABLE IF NOT EXISTS product_values (
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  field_id   INTEGER NOT NULL REFERENCES category_fields(id) ON DELETE CASCADE,
+  value      TEXT DEFAULT '',
+  PRIMARY KEY (product_id, field_id)
+);
+CREATE INDEX IF NOT EXISTS idx_values_field ON product_values(field_id);
 
 CREATE TABLE IF NOT EXISTS products (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -177,6 +227,56 @@ addColumn('warehouses', 'plan_h', 'INTEGER DEFAULT 14');
 // Індекс ставимо тут, а не в CREATE-блоці: на старій базі колонки ще не було.
 addColumn('products', 'category_id', 'INTEGER REFERENCES categories(id)');
 db.exec('CREATE INDEX IF NOT EXISTS idx_products_cat ON products(category_id)');
+
+/* Поля OEM / марка авто / модель раніше були вбудовані у форму товару. Тепер це
+   звичайні поля категорії. Переносимо наявні значення один раз, щоб нічого не зникло.
+   Самі колонки лишаємо в таблиці — як страховку. */
+function migrateLegacyAutoFields() {
+  const done = db.prepare("SELECT value FROM meta WHERE key = 'legacy_auto_fields_moved'").get();
+  if (done) return;
+
+  const legacy = [
+    ['oem', 'OEM-номер'],
+    ['car_make', 'Марка авто'],
+    ['car_model', 'Модель авто'],
+  ].filter(([col]) => db.prepare('PRAGMA table_info(products)').all().some((c) => c.name === col));
+
+  const mark = () => db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('legacy_auto_fields_moved', '1')").run();
+  if (!legacy.length) return mark();
+
+  const cond = legacy.map(([c]) => `COALESCE(${c}, '') <> ''`).join(' OR ');
+  const rows = db.prepare(`SELECT id, category_id, ${legacy.map(([c]) => c).join(', ')} FROM products WHERE ${cond}`).all();
+  if (!rows.length) return mark();
+
+  const run = db.transaction(() => {
+    // Товарам без категорії заводимо «Автозапчастини»; решта отримує поля у свою категорію.
+    let fallbackId = db.prepare("SELECT id FROM categories WHERE name = 'Автозапчастини'").get()?.id;
+    if (!fallbackId && rows.some((r) => !r.category_id)) {
+      fallbackId = db.prepare("INSERT INTO categories(name) VALUES('Автозапчастини')").run().lastInsertRowid;
+    }
+
+    const fieldId = (categoryId, label, sort) => {
+      const found = db.prepare('SELECT id FROM category_fields WHERE category_id = ? AND label = ?').get(categoryId, label);
+      if (found) return found.id;
+      return db.prepare('INSERT INTO category_fields(category_id, label, type, sort) VALUES(?, ?, ?, ?)')
+        .run(categoryId, label, 'text', sort).lastInsertRowid;
+    };
+
+    rows.forEach((r) => {
+      const catId = r.category_id || fallbackId;
+      if (!r.category_id) db.prepare('UPDATE products SET category_id = ? WHERE id = ?').run(catId, r.id);
+      legacy.forEach(([col, label], i) => {
+        const val = r[col];
+        if (!val) return;
+        db.prepare('INSERT OR REPLACE INTO product_values(product_id, field_id, value) VALUES(?, ?, ?)')
+          .run(r.id, fieldId(catId, label, i), val);
+      });
+    });
+    mark();
+  });
+  run();
+}
+migrateLegacyAutoFields();
 
 // Лічильники штрих-кодів живуть у meta, щоб код не «переїжджав» після видалення рядків.
 function nextSeq(key) {
