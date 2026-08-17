@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Склад запчастин</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="top no-print" id="topbar" hidden>
+  <div class="logo">СКЛАД</div>
+  <nav>
+    <a href="#/scan">Сканувати</a>
+    <a href="#/parts">Запчастини</a>
+    <a href="#/warehouses">Склади</a>
+    <a href="#/labels">Наклейки</a>
+    <a href="#/history">Історія</a>
+    <a href="#/integrations">Інтеграції</a>
+  </nav>
+  <button class="ghost sm" id="logoutBtn">Вийти</button>
+</header>
+
+<main id="app"></main>
+<div id="toasts"></div>
+
+<script src="/vendor/jsbarcode.js"></script>
+<script src="/vendor/zxing.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
