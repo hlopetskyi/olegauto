@@ -68,8 +68,9 @@ const createRack = db.transaction((opts) => {
   } = opts;
 
   // Новий стелаж ставимо під уже наявні, щоб блоки не лягли один на одного.
+  // +1 рядок — під смужку з назвою стелажа на плані.
   const autoY = pos_y || db.prepare(`
-    SELECT COALESCE(MAX(pos_y + CASE WHEN orientation = 'v' THEN cols ELSE rows END), 0) AS y
+    SELECT COALESCE(MAX(pos_y + CASE WHEN orientation = 'v' THEN cols ELSE rows END + 1), 0) AS y
       FROM racks WHERE warehouse_id = ?
   `).get(warehouse_id).y;
 
@@ -189,15 +190,29 @@ const deleteRack = (id) => db.prepare('DELETE FROM racks WHERE id = ?').run(id);
 function rackGrid(rackId) {
   const rack = getRack(rackId);
   if (!rack) return null;
+  // Разом з підсумками віддаємо назви коробок і товарів — з них будується
+  // підказка при наведенні на комірку, без окремого запиту на кожну.
   const cells = db.prepare(`
     SELECT l.*,
            (SELECT COALESCE(SUM(s.qty), 0) FROM stock s WHERE s.location_id = l.id) AS qty,
            (SELECT COUNT(*) FROM stock s WHERE s.location_id = l.id AND s.qty > 0) AS products_count,
-           (SELECT COUNT(*) FROM locations b WHERE b.parent_id = l.id) AS boxes_count
+           (SELECT COUNT(*) FROM locations b WHERE b.parent_id = l.id) AS boxes_count,
+           (SELECT COALESCE(SUM(s2.qty), 0) FROM stock s2
+              JOIN locations b2 ON b2.id = s2.location_id
+             WHERE b2.parent_id = l.id) AS boxes_qty,
+           (SELECT group_concat(b.label, '|') FROM locations b WHERE b.parent_id = l.id) AS box_labels,
+           (SELECT group_concat(p.name || ' ×' || s.qty, '|')
+              FROM stock s JOIN products p ON p.id = s.product_id
+             WHERE s.location_id = l.id AND s.qty > 0) AS item_labels
       FROM locations l
      WHERE l.rack_id = ? AND l.kind = 'cell'
      ORDER BY l.row_idx, l.col_idx
-  `).all(rackId);
+  `).all(rackId).map((c) => ({
+    ...c,
+    box_labels: c.box_labels ? c.box_labels.split('|') : [],
+    item_labels: c.item_labels ? c.item_labels.split('|') : [],
+    total_qty: c.qty + c.boxes_qty,
+  }));
   const b = rackBounds(rackId);
   return { rack: { ...rack, rows: Math.max(b.rows, 1), cols: Math.max(b.cols, 1) }, cells };
 }

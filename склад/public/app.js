@@ -276,8 +276,11 @@ async function paintRacks(root) {
           ${c.boxes_count ? `<span class="boxes">${c.boxes_count} кор.</span>` : ''}
         </button>`;
       }).join('');
-      node.querySelectorAll('.cell').forEach((b) =>
-        b.addEventListener('click', () => openLocation(b.dataset.loc)));
+      node.querySelectorAll('.cell').forEach((b) => {
+        const cell = cells.find((c) => c.id === Number(b.dataset.loc));
+        if (cell) bindCellTip(b, cell);
+        b.addEventListener('click', () => { cellTipEl().hidden = true; openLocation(b.dataset.loc); });
+      });
     } catch (e) { node.innerHTML = `<span class="muted small">${esc(e.message)}</span>`; }
   }
 }
@@ -963,11 +966,14 @@ function dlgWarehouse(w) {
 
 /* ------------------------------------------------ план складу */
 
-// Габарити стелажа на плані в клітинках: довгий стелаж лежить уздовж або впоперек.
+// Скільки клітинок плану займає стелаж. Комірки мають бути видні поштучно,
+// тому під кожен ряд комірок відводимо цілу клітинку плану, плюс один рядок під назву.
 // Мінімум 2 клітинки завширшки — інакше назва стелажа не влазить і читається як «С…».
-const rackSpan = (r) => r.orientation === 'v'
-  ? { w: Math.max(2, r.cell_rows), h: Math.max(1, r.cell_cols) }
-  : { w: Math.max(2, r.cell_cols), h: Math.max(1, r.cell_rows) };
+function rackSpan(r) {
+  const cols = r.orientation === 'v' ? r.cell_rows : r.cell_cols;
+  const rows = r.orientation === 'v' ? r.cell_cols : r.cell_rows;
+  return { w: Math.max(2, cols), h: Math.max(1, rows) + 1, cols: Math.max(1, cols), rows: Math.max(1, rows) };
+}
 
 let planPlacing = null; // id стелажа, який зараз переставляють
 
@@ -1024,7 +1030,7 @@ function drawPlan(plan, hit = null) {
   const W = wh.plan_w || 24, H = wh.plan_h || 14;
   const el = $('#plan');
   if (!el) return;
-  const cellPx = 30;
+  const cellPx = 34;
   el.style.setProperty('--cell', cellPx + 'px');
   el.style.gridTemplateColumns = `repeat(${W}, ${cellPx}px)`;
   el.style.gridTemplateRows = `repeat(${H}, ${cellPx}px)`;
@@ -1039,13 +1045,12 @@ function drawPlan(plan, hit = null) {
     const sp = rackSpan(r);
     const x = Math.min(r.pos_x || 0, Math.max(0, W - sp.w));
     const y = Math.min(r.pos_y || 0, Math.max(0, H - sp.h));
-    const cols = r.orientation === 'v' ? r.cell_rows : r.cell_cols;
-    const rows = r.orientation === 'v' ? r.cell_cols : r.cell_rows;
-    return `<div class="rack-block" draggable="true" data-rack-id="${r.id}"
-      title="${esc(r.name)} — ${r.cells_count} комірок, ${r.qty} шт"
+    return `<div class="rack-block" data-rack-id="${r.id}"
       style="grid-column:${x + 1}/span ${sp.w};grid-row:${y + 1}/span ${sp.h}">
-      <div class="rb-name">${esc(r.name)} · ${r.cells_count} ком.</div>
-      <div class="rb-cells" style="grid-template-columns:repeat(${Math.max(1, cols)},1fr);grid-template-rows:repeat(${Math.max(1, rows)},1fr)"
+      <div class="rb-name" draggable="true" title="Потягніть за назву, щоб пересунути стелаж">
+        ${esc(r.name)} · ${r.cells_count} ком.
+      </div>
+      <div class="rb-cells" style="grid-template-columns:repeat(${sp.cols},1fr);grid-template-rows:repeat(${sp.rows},1fr)"
            data-mini="${r.id}"></div>
     </div>`;
   }).join('');
@@ -1066,19 +1071,21 @@ function drawPlan(plan, hit = null) {
 
   el.querySelectorAll('.rack-block').forEach((block) => {
     const rid = Number(block.dataset.rackId);
-    block.addEventListener('click', (e) => {
+    const nameEl = block.querySelector('.rb-name');
+    // По назві — перехід до схеми стелажа; по комірці — її вміст (нижче, у paintMiniCells).
+    nameEl.addEventListener('click', (e) => {
       e.stopPropagation();
       if (planPlacing === rid) { planPlacing = null; el.classList.remove('placing'); block.classList.remove('selected'); return; }
       location.hash = `#/rack/${rid}`;
     });
     // Довгий тиск / друге торкання = режим перестановки (працює й на телефоні).
     block.addEventListener('contextmenu', (e) => { e.preventDefault(); startPlacing(rid); });
-    block.addEventListener('dragstart', (e) => {
+    nameEl.addEventListener('dragstart', (e) => {
       planPlacing = rid;
       e.dataTransfer.setData('text/plain', String(rid));
       el.classList.add('placing');
     });
-    block.addEventListener('dragend', () => { planPlacing = null; el.classList.remove('placing'); });
+    nameEl.addEventListener('dragend', () => { planPlacing = null; el.classList.remove('placing'); });
   });
 
   el.querySelectorAll('.slot').forEach((s) => {
@@ -1100,17 +1107,85 @@ function startPlacing(rackId) {
   $('#planHint').textContent = 'Тепер натисніть на плані місце, куди поставити стелаж.';
 }
 
+// Два стелажі не можуть стояти на одному місці — інакше блоки на плані
+// перекривають один одного і схема перестає відповідати дійсності.
+function rackCollision(plan, rack, x, y) {
+  const a = rackSpan(rack);
+  return plan.racks.find((other) => {
+    if (other.id === rack.id) return false;
+    const b = rackSpan(other);
+    const ox = other.pos_x || 0, oy = other.pos_y || 0;
+    return x < ox + b.w && x + a.w > ox && y < oy + b.h && y + a.h > oy;
+  });
+}
+
 async function placeRack(x, y) {
   const rid = planPlacing;
   if (!rid) return;
   planPlacing = null;
+  const plan = window.__plan;
+  const r = plan.racks.find((rr) => rr.id === rid);
+  const clash = rackCollision(plan, r, x, y);
+  if (clash) {
+    $('#plan').classList.remove('placing');
+    return toast(`Тут уже стоїть «${clash.name}». Виберіть вільне місце.`, 'err');
+  }
   try {
-    const plan = window.__plan;
-    const r = plan.racks.find((rr) => rr.id === rid);
     await api(`/racks/${rid}/position`, { method: 'PUT', body: { pos_x: x, pos_y: y, orientation: r.orientation } });
     r.pos_x = x; r.pos_y = y;
     drawPlan(plan);
   } catch (e) { toast(e.message, 'err'); }
+}
+
+/* ------------------------------------------ підказка над коміркою */
+
+// Одна спільна плашка на всю сторінку — дешевше, ніж тримати її в кожній комірці.
+function cellTipEl() {
+  let t = $('#cellTip');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'cellTip';
+    t.className = 'cell-tip';
+    t.hidden = true;
+    document.body.appendChild(t);
+  }
+  return t;
+}
+
+function cellTipHtml(c) {
+  const total = c.total_qty ?? c.qty;
+  const rows = [];
+  if (c.box_labels?.length) {
+    rows.push(`<div class="ct-group"><em>Коробки</em>${c.box_labels.map((b) => `<span>📦 ${esc(b)}</span>`).join('')}</div>`);
+  }
+  if (c.item_labels?.length) {
+    rows.push(`<div class="ct-group"><em>Товари</em>${c.item_labels.map((i) => `<span>${esc(i)}</span>`).join('')}</div>`);
+  }
+  if (!rows.length) rows.push('<div class="ct-group muted">Порожня комірка</div>');
+  return `<b>${esc(c.label)}</b>${total ? ` <span class="badge ok">${total} шт</span>` : ''}
+    ${rows.join('')}<div class="ct-hint">Натисніть, щоб відкрити вміст</div>`;
+}
+
+function bindCellTip(el, cell) {
+  const show = (e) => {
+    const t = cellTipEl();
+    t.innerHTML = cellTipHtml(cell);
+    t.hidden = false;
+    // Тримаємо плашку в межах вікна, щоб вона не тікала за правий край.
+    const r = el.getBoundingClientRect();
+    const w = t.offsetWidth;
+    let left = r.left + window.scrollX;
+    if (left + w > window.scrollX + document.documentElement.clientWidth - 8) {
+      left = window.scrollX + document.documentElement.clientWidth - w - 8;
+    }
+    const above = r.top > t.offsetHeight + 12;
+    t.style.left = Math.max(8, left) + 'px';
+    t.style.top = (above ? r.top + window.scrollY - t.offsetHeight - 8 : r.bottom + window.scrollY + 8) + 'px';
+  };
+  el.addEventListener('mouseenter', show);
+  el.addEventListener('focus', show);
+  el.addEventListener('mouseleave', () => { cellTipEl().hidden = true; });
+  el.addEventListener('blur', () => { cellTipEl().hidden = true; });
 }
 
 // Мініатюрні комірки всередині блока стелажа на плані.
@@ -1123,12 +1198,27 @@ async function paintMiniCells(racks, hit) {
       const vertical = r.orientation === 'v';
       box.innerHTML = cells.map((c) => {
         const isHit = hit && hit.rack_id === r.id && hit.row === c.row_idx && hit.col === c.col_idx;
-        const cls = isHit ? 'hit' : (c.qty > 0 ? 'full' : '');
+        const total = c.total_qty ?? c.qty;
+        const cls = isHit ? 'hit' : (total > 0 ? 'full' : '');
         // При вертикальній орієнтації ряди й секції міняються місцями.
         const gc = vertical ? c.row_idx + 1 : c.col_idx + 1;
         const gr = vertical ? c.col_idx + 1 : c.row_idx + 1;
-        return `<div class="rb-cell ${cls}" style="grid-column:${gc};grid-row:${gr}" title="${esc(c.label)}: ${c.qty} шт">${c.qty || ''}</div>`;
+        return `<button class="rb-cell ${cls}" data-loc="${c.id}" style="grid-column:${gc};grid-row:${gr}">
+          <span class="rb-lbl">${esc(c.label.replace(r.name + '-', ''))}</span>
+          <span class="rb-qty">${total || ''}</span>
+          ${c.boxes_count ? `<span class="rb-box">${c.boxes_count}📦</span>` : ''}
+        </button>`;
       }).join('');
+
+      box.querySelectorAll('.rb-cell').forEach((el) => {
+        const cell = cells.find((c) => c.id === Number(el.dataset.loc));
+        bindCellTip(el, cell);
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          cellTipEl().hidden = true;
+          openLocation(cell.id);
+        });
+      });
     } catch (e) { /* блок лишиться порожнім */ }
   }
 }
@@ -1237,10 +1327,10 @@ async function viewRack(rackId) {
     for (let c = 0; c < padC; c++) {
       const cell = byPos.get(`${r}:${c}`);
       if (cell) {
-        grid += `<div class="cell ${cell.qty > 0 ? 'filled' : 'empty'}" data-cell="${cell.id}"
+        grid += `<div class="cell ${(cell.total_qty ?? cell.qty) > 0 ? 'filled' : 'empty'}" data-cell="${cell.id}"
             data-r="${r}" data-c="${c}" style="grid-column:${c + 1};grid-row:${r + 1}">
           <span class="lbl">${esc(cell.label)}</span>
-          <span class="qty">${cell.qty || '·'}</span>
+          <span class="qty">${(cell.total_qty ?? cell.qty) || '·'}</span>
           ${cell.boxes_count ? `<span class="boxes">${cell.boxes_count} кор.</span>` : ''}
           ${editingRack ? `<span class="cell-tools">
             <button class="sm" data-ren="${cell.id}" title="Перейменувати">✎</button>
@@ -1325,10 +1415,15 @@ async function viewRack(rackId) {
     } catch (e) { toast(e.message, 'err'); }
   }));
 
-  app.querySelectorAll('[data-cell]').forEach((el) => el.addEventListener('click', (e) => {
-    if (e.target.closest('.cell-tools')) return;
-    openLocation(el.dataset.cell);
-  }));
+  app.querySelectorAll('[data-cell]').forEach((el) => {
+    const cell = cells.find((c) => c.id === Number(el.dataset.cell));
+    if (cell) bindCellTip(el, cell);
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.cell-tools')) return;
+      cellTipEl().hidden = true;
+      openLocation(el.dataset.cell);
+    });
+  });
 
   app.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', async (e) => {
     e.stopPropagation();

@@ -181,26 +181,64 @@ tbody tr:hover { background: var(--panel-2); }
 .plan.placing .slot:hover { background: rgba(47,129,247,.35); }
 
 .rack-block {
-  background: var(--panel-2);
+  background: rgba(30,43,61,.55);
   border: 1px solid #3a5070;
   border-radius: 8px;
-  padding: 4px;
+  padding: 3px;
   display: flex; flex-direction: column; gap: 3px;
   overflow: hidden;
-  cursor: pointer;
   min-width: 0;
 }
-.rack-block:hover { border-color: var(--accent-2); }
 .rack-block.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(255,176,32,.35); }
-.rack-block .rb-name { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rack-block .rb-cells { display: grid; gap: 2px; flex: 1; min-height: 0; }
-.rack-block .rb-cell {
-  background: #26374e; border-radius: 3px; min-height: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 9px; color: var(--muted); overflow: hidden;
+.rack-block .rb-name {
+  font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: grab; padding: 1px 3px; border-radius: 4px; flex: 0 0 auto;
 }
-.rack-block .rb-cell.full { background: #2c5c39; color: #b7f0c6; }
-.rack-block .rb-cell.hit { background: var(--accent); color: #10161f; font-weight: 700; }
+.rack-block .rb-name:hover { background: var(--panel-2); color: var(--accent-2); }
+.rack-block .rb-cells { display: grid; gap: 3px; flex: 1; min-height: 0; }
+
+/* Комірка на плані — самостійна кнопка, а не частина суцільного прямокутника. */
+.rack-block .rb-cell {
+  background: #26374e;
+  border: 1px solid #3d5573;
+  border-radius: 4px;
+  min-height: 0; min-width: 0; padding: 1px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  font: inherit; color: var(--muted); overflow: hidden; cursor: pointer;
+  line-height: 1.05;
+}
+.rack-block .rb-cell:hover { border-color: var(--accent-2); background: #31465f; }
+.rack-block .rb-cell .rb-lbl { font-size: 9px; opacity: .85; }
+.rack-block .rb-cell .rb-qty { font-size: 12px; font-weight: 700; color: var(--text); }
+.rack-block .rb-cell .rb-box { font-size: 8px; }
+.rack-block .rb-cell.full { background: #2c5c39; border-color: #3f7a50; color: #b7f0c6; }
+.rack-block .rb-cell.full .rb-qty { color: #d6ffe2; }
+.rack-block .rb-cell.hit {
+  background: var(--accent); border-color: #fff; color: #10161f; font-weight: 700;
+  animation: pulse 1s ease-in-out infinite;
+}
+.rack-block .rb-cell.hit .rb-qty { color: #10161f; }
+
+/* --------------------------------------------- підказка над коміркою */
+
+.cell-tip {
+  position: absolute; z-index: 200;
+  max-width: 280px;
+  background: #0d151f;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.55);
+  font-size: 13px;
+  pointer-events: none;
+}
+.cell-tip .ct-group { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.cell-tip .ct-group em {
+  font-style: normal; color: var(--muted); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.cell-tip .ct-group span { color: var(--text); }
+.cell-tip .ct-hint { margin-top: 7px; color: var(--muted); font-size: 11px; }
 
 .zone-block {
   background: #2a2438; border: 1px dashed #5a4a7a; border-radius: 8px;
