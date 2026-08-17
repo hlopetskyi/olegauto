@@ -15,6 +15,9 @@ const PORT = process.env.PORT || 3200;
 const PASSWORD = process.env.INVENTA_PASSWORD || process.env.SKLAD_PASSWORD || 'inventa';
 const SESSION_SECRET = process.env.INVENTA_SECRET || process.env.SKLAD_SECRET || 'change-me-in-production';
 
+const UPLOADS = path.join(require('./db').DATA_DIR, 'uploads');
+fs.mkdirSync(UPLOADS, { recursive: true });
+
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '25mb' })); // у тілі приходять фото й CSV
@@ -209,6 +212,29 @@ api.get('/products/:id', wrap((req) => S.productFull(id(req))));
 api.put('/products/:id', wrap((req) => S.updateProduct(id(req), req.body)));
 api.delete('/products/:id', wrap((req) => (S.deleteProduct(id(req)), { ok: true })));
 
+// масові дії над обраними товарами
+api.post('/products/bulk/duplicate', wrap((req) => {
+  const made = S.bulkDuplicate((req.body.ids || []).map(Number));
+  // Фото копіюємо файлами: копія без знімка на складі майже даремна.
+  made.forEach((m) => m.source_photos.forEach((file) => {
+    try {
+      const ext = path.extname(file) || '.jpg';
+      const name = `${m.id}-${crypto.randomBytes(8).toString('hex')}${ext}`;
+      fs.copyFileSync(path.join(UPLOADS, file), path.join(UPLOADS, name));
+      S.addPhoto(m.id, name);
+    } catch (e) { /* вихідного файлу вже немає — копія лишиться без фото */ }
+  }));
+  return { created: made.length, ids: made.map((m) => m.id) };
+}));
+
+api.post('/products/bulk/category', wrap((req) =>
+  S.bulkSetCategory((req.body.ids || []).map(Number), req.body.category_id ? Number(req.body.category_id) : null)));
+
+api.post('/products/bulk/move-stock', wrap((req) =>
+  S.bulkMoveStock((req.body.ids || []).map(Number), Number(req.body.location_id), req.body.note)));
+
+api.post('/products/bulk/delete', wrap((req) => S.bulkDelete((req.body.ids || []).map(Number))));
+
 // категорії товарів
 api.get('/categories', wrap(() => S.listCategories()));
 api.post('/categories', wrap((req) => S.createCategory(req.body)));
@@ -290,9 +316,6 @@ api.delete('/product-links/:id', wrap((req) => (S.unlinkProduct(id(req)), { ok: 
 app.use('/api', api);
 
 /* ------------------------------------------------------------------ фото */
-
-const UPLOADS = path.join(require('./db').DATA_DIR, 'uploads');
-fs.mkdirSync(UPLOADS, { recursive: true });
 
 // Приймаємо картинку як data-URL: браузер сам стискає її перед відправкою,
 // тому окрема бібліотека для multipart не потрібна.

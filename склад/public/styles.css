@@ -573,3 +573,35 @@ tbody tr:hover { background: var(--panel-2); }
 
 /* Емодзі-іконка в підписі кнопки: без відступу вона злипається з текстом. */
 .bi { margin-right: 7px; font-style: normal; display: inline-block; }
+
+/* ------------------------------------------------- вибір кількох товарів */
+
+.pcard.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.pcard[data-pick] { cursor: pointer; position: relative; }
+.pcard .pick {
+  position: absolute; top: 8px; left: 8px; z-index: 2;
+  width: 24px; height: 24px; border-radius: 7px;
+  border: 2px solid var(--line-strong); background: var(--panel);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: var(--accent-ink);
+}
+.pcard .pick.on { background: var(--accent); border-color: var(--accent); }
+
+.pick-cell { width: 40px; }
+.pick-cell input { width: 17px; height: 17px; }
+tr.row-selected { background: var(--accent-soft); }
+tr.row-selected:hover { background: var(--accent-soft); }
+
+.select-bar {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 999px; padding: 9px 14px;
+  box-shadow: var(--shadow-lg); z-index: 90;
+  max-width: calc(100vw - 24px);
+}
+.select-bar .sb-count { font-size: 14px; color: var(--text-2); margin-right: 4px; white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .select-bar { border-radius: var(--radius-lg); left: 12px; right: 12px; transform: none; justify-content: center; }
+}

@@ -595,6 +595,74 @@ function searchProducts({ q = '', limit = 100, offset = 0, lowStock = false, cat
   return db.prepare(sql).all(...args);
 }
 
+/* --------------------------------------------------- масові дії над товарами */
+
+/**
+ * Копія товару: усі поля, значення полів категорії та мінімальні залишки.
+ * Заводські штрих-коди не копіюємо — вони унікальні й належать конкретній
+ * позиції. Залишки теж не копіюємо: копія створюється порожньою.
+ */
+const duplicateProduct = db.transaction((id) => {
+  const src = productFull(id);
+  if (!src) throw new Error('Товар не знайдено');
+  const copy = createProduct({
+    name: `${src.name} (копія)`,
+    code: src.code ? `${src.code}-копія` : '',
+    unit: src.unit,
+    price: src.price,
+    min_qty: src.min_qty,
+    note: src.note,
+    category_id: src.category_id,
+    values: src.values,
+  });
+  return { id: copy.id, source_photos: src.photos.map((p) => p.file) };
+});
+
+const bulkDuplicate = db.transaction((ids) => (ids || []).map((id) => duplicateProduct(id)));
+
+// Зміна категорії гуртом. Значення полів, яких у новій категорії немає,
+// прибираються — інакше в базі осідали б дані від старої категорії.
+const bulkSetCategory = db.transaction((ids, categoryId) => {
+  const cat = categoryId ? getCategory(categoryId) : null;
+  if (categoryId && !cat) throw new Error('Категорію не знайдено');
+  let moved = 0;
+  (ids || []).forEach((id) => {
+    const p = productRow(id);
+    if (!p) return;
+    db.prepare('UPDATE products SET category_id = ? WHERE id = ?').run(categoryId || null, id);
+    saveProductValues(id, categoryId || null, productValues(id));
+    moved++;
+  });
+  return { moved, category: cat ? cat.name : null };
+});
+
+const bulkDelete = db.transaction((ids) => {
+  let deleted = 0;
+  (ids || []).forEach((id) => {
+    if (productRow(id)) { deleteProduct(id); deleted++; }
+  });
+  return { deleted };
+});
+
+/**
+ * Переміщення залишків обраних товарів в одне місце.
+ * Кожне переміщення пишеться в історію окремим рядком — щоб потім було видно,
+ * звідки саме приїхав товар.
+ */
+const bulkMoveStock = db.transaction((ids, toLocationId, note) => {
+  const to = locationFull(toLocationId);
+  if (!to) throw new Error('Місце призначення не знайдено');
+  let moved = 0, qty = 0;
+  (ids || []).forEach((id) => {
+    productPlacements(id).forEach((pl) => {
+      if (pl.location_id === toLocationId) return;
+      stockMove(id, pl.location_id, toLocationId, pl.qty, note || `Групове переміщення в ${to.label}`);
+      moved++; qty += pl.qty;
+    });
+  });
+  return { moved, qty, location: to.label };
+});
+
 /* ----------------------------------------------------------------- stock */
 
 const getQty = (productId, locId) => {
@@ -962,6 +1030,7 @@ module.exports = {
   warehousePlan, updateWarehousePlan,
   listLocations, createLocation, updateLocation, deleteLocation, locationFull, locationContents,
   searchProducts, productFull, createProduct, updateProduct, deleteProduct, productPlacements,
+  duplicateProduct, bulkDuplicate, bulkSetCategory, bulkDelete, bulkMoveStock,
   listCategories, getCategory, createCategory, updateCategory, deleteCategory,
   listCategoryFields, effectiveFields, createField, updateField, deleteField,
   listPresets, applyPreset, productValues,

@@ -77,6 +77,8 @@ const renderAllBarcodes = (root = document) =>
 
 let SETTINGS = null;
 let productsView = localStorage.getItem('inventa_products_view') || 'grid';
+let selectMode = false;
+let selected = new Set();
 let ME = { authed: false, user: null };
 
 // Тема, акцент і назва — єдине місце, де вони застосовуються до сторінки.
@@ -903,6 +905,8 @@ async function viewProducts(params) {
           <button data-view="grid" class="${productsView === 'grid' ? 'active' : ''}"><span class="bi">▦</span>Плитки</button>
           <button data-view="list" class="${productsView === 'list' ? 'active' : ''}"><span class="bi">☰</span>Список</button>
         </div>
+        <button class="sm ${selectMode ? 'primary' : ''}" id="selectToggle">
+          ${selectMode ? 'Готово' : '☑ Вибрати'}</button>
         <label class="field grow" style="margin:0"><span>Категорія</span>
           <select id="cat">
             <option value="">Усі категорії</option>
@@ -922,8 +926,11 @@ async function viewProducts(params) {
     ? `<span class="badge ${p.min_qty > 0 && p.total_qty <= p.min_qty ? 'warn' : 'ok'}">${p.total_qty} ${esc(p.unit || 'шт')}</span>`
     : '<span class="badge err">немає</span>');
 
+  // У режимі вибору плитка перестає бути посиланням: клік ставить позначку.
   const cardsHtml = (items) => `<div class="grid-products">${items.map((p) => `
-    <a class="pcard" href="#/product/${p.id}">
+    <${selectMode ? 'div' : 'a'} class="pcard ${selected.has(p.id) ? 'selected' : ''}"
+      ${selectMode ? `data-pick="${p.id}"` : `href="#/product/${p.id}"`}>
+      ${selectMode ? `<span class="pick ${selected.has(p.id) ? 'on' : ''}">${selected.has(p.id) ? '✓' : ''}</span>` : ''}
       <div class="pimg">${p.photo
         ? `<img src="/uploads/${esc(p.photo)}" alt="" loading="lazy">`
         : NO_PHOTO}</div>
@@ -934,11 +941,13 @@ async function viewProducts(params) {
           ${p.code ? `<span class="mono">${esc(p.code)}</span>` : ''}
         </div>
       </div>
-    </a>`).join('')}</div>`;
+    </${selectMode ? 'div' : 'a'}>`).join('')}</div>`;
 
   const tableHtml = (items) => `<div class="table-wrap"><table>
-      <thead><tr><th></th><th>Назва</th><th>Категорія</th><th>Артикул</th><th>Залишок</th><th>Код</th></tr></thead>
-      <tbody>${items.map((p) => `<tr>
+      <thead><tr>${selectMode ? '<th class="pick-cell"><input type="checkbox" id="pickAll"></th>' : ''}
+        <th></th><th>Назва</th><th>Категорія</th><th>Артикул</th><th>Залишок</th><th>Код</th></tr></thead>
+      <tbody>${items.map((p) => `<tr class="${selected.has(p.id) ? 'row-selected' : ''}">
+        ${selectMode ? `<td class="pick-cell"><input type="checkbox" data-pick="${p.id}" ${selected.has(p.id) ? 'checked' : ''}></td>` : ''}
         <td class="thumb-cell">${p.photo
           ? `<img class="thumb" src="/uploads/${esc(p.photo)}" alt="" loading="lazy">`
           : `<span class="thumb thumb-empty">${NO_PHOTO}</span>`}</td>
@@ -949,21 +958,49 @@ async function viewProducts(params) {
         <td class="mono small muted">${esc(p.barcode)}</td>
       </tr>`).join('')}</tbody></table></div>`;
 
+  let lastItems = [];
   const load = async () => {
     const low = $('#low').checked ? '1' : '';
     const items = await api('/products' + qs({ q: $('#q').value, low, category: $('#cat').value, limit: 300 }));
+    lastItems = items;
     if (!items.length) {
       $('#list').innerHTML = `<p class="muted">Нічого не знайдено.
         ${$('#q').value ? `<a href="#/products?new=${encodeURIComponent($('#q').value)}">Створити такий товар?</a>` : ''}</p>`;
+      renderSelectBar();
       return;
     }
     $('#list').innerHTML = productsView === 'grid' ? cardsHtml(items) : tableHtml(items);
+    if (selectMode) bindPicks();
+    renderSelectBar();
+  };
+
+  // Клік по плитці або прапорцю в рядку — позначити чи зняти позначку.
+  const bindPicks = () => {
+    $('#list').querySelectorAll('[data-pick]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        if (el.tagName !== 'INPUT') e.preventDefault();
+        const id = Number(el.dataset.pick);
+        if (selected.has(id)) selected.delete(id); else selected.add(id);
+        load();
+      });
+    });
+    const all = $('#pickAll');
+    if (all) all.addEventListener('change', () => {
+      lastItems.forEach((p) => (all.checked ? selected.add(p.id) : selected.delete(p.id)));
+      load();
+    });
   };
 
   let timer;
   $('#q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 220); });
   $('#low').addEventListener('change', load);
   $('#cat').addEventListener('change', load);
+
+  $('#selectToggle').addEventListener('click', () => {
+    selectMode = !selectMode;
+    if (!selectMode) selected.clear();
+    viewProducts(params);
+  });
   $('#addProduct').addEventListener('click', () => dlgProduct(null));
 
   // Вибраний вигляд запам'ятовуємо: комірник відкриває цей екран десятки разів на день.
@@ -977,6 +1014,113 @@ async function viewProducts(params) {
   });
   await load();
   if (params.get('new')) dlgProduct({ name: params.get('new') });
+}
+
+/* --------------------------------------------- панель дій над обраними */
+
+function selectBarEl() {
+  let bar = $('#selectBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'selectBar';
+    bar.className = 'select-bar no-print';
+    document.body.appendChild(bar);
+  }
+  return bar;
+}
+
+function renderSelectBar() {
+  const bar = selectBarEl();
+  if (!selectMode || !selected.size) { bar.hidden = true; bar.innerHTML = ''; return; }
+  bar.hidden = false;
+  bar.innerHTML = `
+    <span class="sb-count">Вибрано: <b>${selected.size}</b></span>
+    <button class="sm" data-bulk="duplicate">Копіювати</button>
+    <button class="sm" data-bulk="category">Перенести в категорію</button>
+    <button class="sm" data-bulk="move">Перемістити залишки</button>
+    <button class="sm danger" data-bulk="delete">Видалити</button>
+    <button class="sm ghost" data-bulk="cancel">Скасувати</button>`;
+
+  bar.querySelectorAll('[data-bulk]').forEach((b) => b.addEventListener('click', () => bulkAction(b.dataset.bulk)));
+}
+
+async function bulkAction(action) {
+  const ids = [...selected];
+  if (!ids.length) return;
+
+  if (action === 'cancel') {
+    selected.clear(); selectMode = false; return route();
+  }
+
+  if (action === 'duplicate') {
+    try {
+      const res = await api('/products/bulk/duplicate', { method: 'POST', body: { ids } });
+      toast(`Створено копій: ${res.created}`, 'ok');
+      selected.clear(); selectMode = false; route();
+    } catch (e) { toast(e.message, 'err'); }
+    return;
+  }
+
+  if (action === 'delete') {
+    if (!confirm(`Видалити позицій: ${ids.length}? Разом з ними зникнуть їхні залишки на складі.`)) return;
+    try {
+      const res = await api('/products/bulk/delete', { method: 'POST', body: { ids } });
+      toast(`Видалено: ${res.deleted}`, 'ok');
+      selected.clear(); selectMode = false; route();
+    } catch (e) { toast(e.message, 'err'); }
+    return;
+  }
+
+  if (action === 'category') {
+    const cats = await api('/categories');
+    const bg = modal(`
+      <h2>Перенести в категорію</h2>
+      <p class="small muted">Позицій: <b>${ids.length}</b>. Значення полів, яких у новій категорії
+        немає, буде прибрано.</p>
+      <form id="f">
+        <label class="field"><span>Категорія</span>
+          <select id="cat">${categoryOptions(cats, null)}</select></label>
+        <div class="row"><button class="primary grow">Перенести</button>
+          <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
+      </form>`);
+    bg.querySelector('#f').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const res = await api('/products/bulk/category', { method: 'POST', body: {
+          ids, category_id: bg.querySelector('#cat').value || null,
+        } });
+        closeModal();
+        toast(res.category ? `Перенесено в «${res.category}»: ${res.moved}` : `Категорію знято: ${res.moved}`, 'ok');
+        selected.clear(); selectMode = false; route();
+      } catch (err) { toast(err.message, 'err'); }
+    });
+    return;
+  }
+
+  if (action === 'move') {
+    const opts = await locationOptions();
+    const bg = modal(`
+      <h2>Перемістити залишки</h2>
+      <p class="small muted">Увесь залишок обраних позицій (<b>${ids.length}</b>) переїде в одне місце.
+        Кожне переміщення запишеться в історію окремо — буде видно, звідки що приїхало.</p>
+      <form id="f">
+        <label class="field"><span>Куди</span><select id="to" required>${opts}</select></label>
+        <label class="field"><span>Коментар</span><input id="note" placeholder="напр. перестановка стелажа"></label>
+        <div class="row"><button class="primary grow">Перемістити</button>
+          <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
+      </form>`);
+    bg.querySelector('#f').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const res = await api('/products/bulk/move-stock', { method: 'POST', body: {
+          ids, location_id: Number(bg.querySelector('#to').value), note: bg.querySelector('#note').value,
+        } });
+        closeModal();
+        toast(res.moved ? `Переміщено ${res.qty} шт у «${res.location}»` : 'Нічого переміщувати — залишків немає', res.moved ? 'ok' : 'err');
+        selected.clear(); selectMode = false; route();
+      } catch (err) { toast(err.message, 'err'); }
+    });
+  }
 }
 
 /* ------------------------------------------------------- імпорт з файлу */
@@ -2282,6 +2426,8 @@ curl -H "X-Api-Key: sk_..." "${origin}/api/v1/locate?code=7700123456"</pre>
 async function route() {
   await stopCamera();
   closeModal();
+  // Вибір живе лише на сторінці товарів.
+  if (!location.hash.startsWith('#/products')) { selectMode = false; selected.clear(); renderSelectBar(); }
   const raw = location.hash.slice(1) || '/scan';
   const [path, query] = raw.split('?');
   const params = new URLSearchParams(query || '');
