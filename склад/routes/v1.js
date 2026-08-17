@@ -30,22 +30,24 @@ const wrap = (fn) => (req, res) => {
   }
 };
 
-// Стисле подання деталі для зовнішньої системи: залишок + де лежить.
-function publicPart(part) {
-  if (!part) return null;
+// Стисле подання товару для зовнішньої системи: залишок + де лежить.
+function publicProduct(product) {
+  if (!product) return null;
   return {
-    id: part.id,
-    barcode: part.barcode,
-    sku: part.code,
-    oem: part.oem,
-    name: part.name,
-    brand: part.brand,
-    car: [part.car_make, part.car_model].filter(Boolean).join(' '),
-    unit: part.unit,
-    price: part.price,
-    total_qty: part.total_qty,
-    in_stock: part.total_qty > 0,
-    placements: part.placements.map((p) => ({
+    id: product.id,
+    barcode: product.barcode,
+    sku: product.code,
+    oem: product.oem,
+    name: product.name,
+    brand: product.brand,
+    category: product.category_name || null,
+    category_path: [product.category_parent_name, product.category_name].filter(Boolean).join(' / ') || null,
+    car: [product.car_make, product.car_model].filter(Boolean).join(' '),
+    unit: product.unit,
+    price: product.price,
+    total_qty: product.total_qty,
+    in_stock: product.total_qty > 0,
+    placements: product.placements.map((p) => ({
       warehouse: p.warehouse_name,
       rack: p.rack_name,
       location: p.label,
@@ -58,39 +60,39 @@ function publicPart(part) {
 
 router.get('/ping', (req, res) => res.json({ ok: true, integration: req.integration.slug }));
 
-// Пошук деталі: за нашим id/штрих-кодом/артикулом або за external_id самої інтеграції.
-router.get('/parts/lookup', wrap((req) => {
+// Пошук товару: за нашим id/штрих-кодом/артикулом або за external_id самої інтеграції.
+router.get('/products/lookup', wrap((req) => {
   const { external_id, sku, barcode, q } = req.query;
-  let part = null;
-  if (external_id || sku) part = S.findByExternal(req.integration.id, { external_id, sku });
-  if (!part && (barcode || q)) {
+  let product = null;
+  if (external_id || sku) product = S.findByExternal(req.integration.id, { external_id, sku });
+  if (!product && (barcode || q)) {
     const r = S.resolveCode(barcode || q);
-    if (r.type === 'part') part = r.part;
+    if (r.type === 'product') product = r.product;
     else if (r.type === 'many') return { matches: r.results.map((p) => ({ id: p.id, sku: p.code, name: p.name, total_qty: p.total_qty })) };
   }
-  if (!part) return { part: null };
-  return { part: publicPart(part) };
+  if (!product) return { product: null };
+  return { product: publicProduct(product) };
 }));
 
-router.get('/parts', wrap((req) => ({
-  parts: S.searchParts({ q: req.query.q || '', limit: Number(req.query.limit) || 50 })
+router.get('/products', wrap((req) => ({
+  products: S.searchProducts({ q: req.query.q || '', limit: Number(req.query.limit) || 50 })
     .map((p) => ({ id: p.id, sku: p.code, oem: p.oem, name: p.name, total_qty: p.total_qty, price: p.price })),
 })));
 
-router.get('/parts/:id', wrap((req) => ({ part: publicPart(S.partFull(Number(req.params.id))) })));
+router.get('/products/:id', wrap((req) => ({ product: publicProduct(S.productFull(Number(req.params.id))) })));
 
 // Наявність одразу для списку артикулів — для сторінки товару в магазині.
 router.post('/stock/check', wrap((req) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   return {
     items: items.map((it) => {
-      const part = S.findByExternal(req.integration.id, { external_id: it.external_id, sku: it.sku });
+      const product = S.findByExternal(req.integration.id, { external_id: it.external_id, sku: it.sku });
       return {
         external_id: it.external_id ?? null,
         sku: it.sku ?? null,
-        found: !!part,
-        total_qty: part ? part.total_qty : 0,
-        in_stock: part ? part.total_qty > 0 : false,
+        found: !!product,
+        total_qty: product ? product.total_qty : 0,
+        in_stock: product ? product.total_qty > 0 : false,
       };
     }),
   };
@@ -99,8 +101,8 @@ router.post('/stock/check', wrap((req) => {
 // Продаж у магазині: списати з конкретного місця (або з найбільшого, якщо місце не вказали).
 router.post('/stock/out', wrap((req) => {
   const { external_id, sku, qty = 1, location_barcode, note } = req.body || {};
-  const part = S.findByExternal(req.integration.id, { external_id, sku });
-  if (!part) throw new Error('part_not_found');
+  const product = S.findByExternal(req.integration.id, { external_id, sku });
+  if (!product) throw new Error('product_not_found');
 
   let locId = null;
   if (location_barcode) {
@@ -108,54 +110,54 @@ router.post('/stock/out', wrap((req) => {
     if (r.type !== 'location') throw new Error('location_not_found');
     locId = r.location.id;
   } else {
-    const best = [...part.placements].sort((a, b) => b.qty - a.qty)[0];
+    const best = [...product.placements].sort((a, b) => b.qty - a.qty)[0];
     if (!best) throw new Error('no_stock');
     locId = best.location_id;
   }
-  const updated = S.stockOut(part.id, locId, Number(qty), note || `Продаж через ${req.integration.name}`);
-  return { part: publicPart(updated) };
+  const updated = S.stockOut(product.id, locId, Number(qty), note || `Продаж через ${req.integration.name}`);
+  return { product: publicProduct(updated) };
 }));
 
 // Прихід ззовні (повернення, поставка).
 router.post('/stock/in', wrap((req) => {
   const { external_id, sku, qty = 1, location_barcode, note } = req.body || {};
-  const part = S.findByExternal(req.integration.id, { external_id, sku });
-  if (!part) throw new Error('part_not_found');
+  const product = S.findByExternal(req.integration.id, { external_id, sku });
+  if (!product) throw new Error('product_not_found');
   if (!location_barcode) throw new Error('location_barcode_required');
   const r = S.resolveCode(location_barcode);
   if (r.type !== 'location') throw new Error('location_not_found');
-  const updated = S.stockIn(part.id, r.location.id, Number(qty), note || `Прихід через ${req.integration.name}`);
-  return { part: publicPart(updated) };
+  const updated = S.stockIn(product.id, r.location.id, Number(qty), note || `Прихід через ${req.integration.name}`);
+  return { product: publicProduct(updated) };
 }));
 
-// Прив'язка товару магазину до нашої деталі.
-router.post('/parts/link', wrap((req) => {
-  const { part_id, sku, external_id, external_sku, external_url } = req.body || {};
-  let pid = part_id;
+// Прив'язка товару магазину до нашого товару.
+router.post('/products/link', wrap((req) => {
+  const { product_id, sku, external_id, external_sku, external_url } = req.body || {};
+  let pid = product_id;
   if (!pid && sku) {
     const r = S.resolveCode(sku);
-    if (r.type !== 'part') throw new Error('part_not_found');
-    pid = r.part.id;
+    if (r.type !== 'product') throw new Error('product_not_found');
+    pid = r.product.id;
   }
-  if (!pid) throw new Error('part_id_or_sku_required');
-  const part = S.linkPart({
-    part_id: pid,
+  if (!pid) throw new Error('product_id_or_sku_required');
+  const product = S.linkProduct({
+    product_id: pid,
     integration_id: req.integration.id,
     external_id,
     external_sku: external_sku || '',
     external_url: external_url || '',
   });
-  return { part: publicPart(part) };
+  return { product: publicProduct(product) };
 }));
 
-// Де лежить: те, заради чого все й затівалось — код деталі → склад, стелаж, комірка + координати для схеми.
+// Де лежить: те, заради чого все й затівалось — код товару → склад, стелаж, комірка + координати для схеми.
 router.get('/locate', wrap((req) => {
   const r = S.resolveCode(req.query.code || req.query.sku || '');
-  if (r.type === 'part') {
+  if (r.type === 'product') {
     return {
-      type: 'part',
-      part: publicPart(r.part),
-      map: r.part.placements.map((p) => ({
+      type: 'product',
+      product: publicProduct(r.product),
+      map: r.product.placements.map((p) => ({
         warehouse_id: p.warehouse_id,
         warehouse: p.warehouse_name,
         rack_id: p.rack_id,

@@ -102,25 +102,33 @@ api.get('/locations/:id', wrap((req) => S.locationContents(id(req))));
 api.put('/locations/:id', wrap((req) => S.updateLocation(id(req), req.body)));
 api.delete('/locations/:id', wrap((req) => (S.deleteLocation(id(req)), { ok: true })));
 
-// деталі
-api.get('/parts', wrap((req) => S.searchParts({
+// товари
+api.get('/products', wrap((req) => S.searchProducts({
   q: req.query.q || '',
   limit: Number(req.query.limit) || 100,
   offset: Number(req.query.offset) || 0,
   lowStock: req.query.low === '1',
+  categoryId: req.query.category ? Number(req.query.category) : null,
+  uncategorized: req.query.category === 'none',
 })));
-api.post('/parts', wrap((req) => S.createPart(req.body)));
-api.get('/parts/:id', wrap((req) => S.partFull(id(req))));
-api.put('/parts/:id', wrap((req) => S.updatePart(id(req), req.body)));
-api.delete('/parts/:id', wrap((req) => (S.deletePart(id(req)), { ok: true })));
+api.post('/products', wrap((req) => S.createProduct(req.body)));
+api.get('/products/:id', wrap((req) => S.productFull(id(req))));
+api.put('/products/:id', wrap((req) => S.updateProduct(id(req), req.body)));
+api.delete('/products/:id', wrap((req) => (S.deleteProduct(id(req)), { ok: true })));
+
+// категорії товарів
+api.get('/categories', wrap(() => S.listCategories()));
+api.post('/categories', wrap((req) => S.createCategory(req.body)));
+api.put('/categories/:id', wrap((req) => S.updateCategory(id(req), req.body)));
+api.delete('/categories/:id', wrap((req) => (S.deleteCategory(id(req)), { ok: true })));
 
 // рух товару
-api.post('/stock/in', wrap((req) => S.stockIn(+req.body.part_id, +req.body.location_id, +req.body.qty, req.body.note)));
-api.post('/stock/out', wrap((req) => S.stockOut(+req.body.part_id, +req.body.location_id, +req.body.qty, req.body.note)));
-api.post('/stock/move', wrap((req) => S.stockMove(+req.body.part_id, +req.body.from_location_id, +req.body.to_location_id, +req.body.qty, req.body.note)));
-api.post('/stock/adjust', wrap((req) => S.stockAdjust(+req.body.part_id, +req.body.location_id, +req.body.qty, req.body.note)));
+api.post('/stock/in', wrap((req) => S.stockIn(+req.body.product_id, +req.body.location_id, +req.body.qty, req.body.note)));
+api.post('/stock/out', wrap((req) => S.stockOut(+req.body.product_id, +req.body.location_id, +req.body.qty, req.body.note)));
+api.post('/stock/move', wrap((req) => S.stockMove(+req.body.product_id, +req.body.from_location_id, +req.body.to_location_id, +req.body.qty, req.body.note)));
+api.post('/stock/adjust', wrap((req) => S.stockAdjust(+req.body.product_id, +req.body.location_id, +req.body.qty, req.body.note)));
 api.get('/movements', wrap((req) => S.listMovements({
-  partId: req.query.part_id ? Number(req.query.part_id) : null,
+  productId: req.query.product_id ? Number(req.query.product_id) : null,
   limit: Number(req.query.limit) || 200,
 })));
 
@@ -133,8 +141,8 @@ api.post('/integrations', wrap((req) => S.createIntegration(req.body)));
 api.put('/integrations/:id', wrap((req) => S.updateIntegration(id(req), req.body)));
 api.post('/integrations/:id/rotate', wrap((req) => S.rotateIntegrationKey(id(req))));
 api.delete('/integrations/:id', wrap((req) => (S.deleteIntegration(id(req)), { ok: true })));
-api.post('/part-links', wrap((req) => S.linkPart(req.body)));
-api.delete('/part-links/:id', wrap((req) => (S.unlinkPart(id(req)), { ok: true })));
+api.post('/product-links', wrap((req) => S.linkProduct(req.body)));
+api.delete('/product-links/:id', wrap((req) => (S.unlinkProduct(id(req)), { ok: true })));
 
 app.use('/api', api);
 

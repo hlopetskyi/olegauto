@@ -79,7 +79,7 @@ function renderLogin() {
   $('#topbar').hidden = true;
   app.innerHTML = `
     <div class="card" style="max-width:380px;margin:12vh auto">
-      <h1>Склад запчастин</h1>
+      <h1>Складський облік</h1>
       <p class="muted small">Введіть пароль доступу.</p>
       <form id="loginForm">
         <label class="field"><span>Пароль</span><input type="password" id="pw" autofocus></label>
@@ -111,7 +111,7 @@ function viewScan() {
       <h1>Сканувати</h1>
       <p class="muted small">Наведіть сканер і стрельніть у код, або введіть артикул/назву вручну.</p>
       <form id="scanForm">
-        <input id="scanInput" autocomplete="off" placeholder="Код деталі, місця або артикул" autofocus>
+        <input id="scanInput" autocomplete="off" placeholder="Код товару, місця або артикул" autofocus>
       </form>
       <div class="row" style="justify-content:center;margin-top:12px">
         <button class="ghost sm" id="camBtn">📷 Камерою телефона</button>
@@ -173,12 +173,12 @@ async function doResolve(code) {
   const out = $('#scanResult');
   try {
     const r = await api('/resolve' + qs({ code }));
-    if (r.type === 'part') out.innerHTML = partCardHtml(r.part);
+    if (r.type === 'product') out.innerHTML = productCardHtml(r.product);
     else if (r.type === 'location') out.innerHTML = locationCardHtml(r);
     else if (r.type === 'many') out.innerHTML = manyHtml(r);
     else out.innerHTML = `<div class="card"><h2>Нічого не знайдено</h2>
         <p class="muted">За запитом «${esc(r.query)}» нічого немає.
-        <a href="#/parts?new=${encodeURIComponent(r.query)}">Створити запчастину?</a></p></div>`;
+        <a href="#/products?new=${encodeURIComponent(r.query)}">Створити товар?</a></p></div>`;
     renderAllBarcodes(out);
     bindCardActions(out);
     out.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -190,15 +190,15 @@ function manyHtml(r) {
     <div class="table-wrap"><table>
       <thead><tr><th>Назва</th><th>Артикул</th><th>Залишок</th></tr></thead>
       <tbody>${r.results.map((p) => `<tr>
-        <td><a href="#/part/${p.id}">${esc(p.name)}</a></td>
+        <td><a href="#/product/${p.id}">${esc(p.name)}</a></td>
         <td class="mono small">${esc(p.code)}</td>
         <td>${p.total_qty}</td></tr>`).join('')}</tbody>
     </table></div></div>`;
 }
 
-/* ------------------------------------------ картка деталі зі схемою */
+/* -------------------------------------------- картка товару зі схемою */
 
-function partCardHtml(p) {
+function productCardHtml(p) {
   const qtyBadge = p.total_qty > 0
     ? `<span class="badge ok">${p.total_qty} ${esc(p.unit)}</span>`
     : '<span class="badge err">немає на складі</span>';
@@ -215,9 +215,9 @@ function partCardHtml(p) {
       ${pl.rack_id ? `<div class="rack" data-rack="${pl.rack_id}"
             data-hit-row="${pl.parent_row ?? pl.row_idx}" data-hit-col="${pl.parent_col ?? pl.col_idx}"></div>` : ''}
       <div class="row" style="margin-top:10px">
-        <button class="sm" data-act="out" data-part="${p.id}" data-loc="${pl.location_id}">Видати</button>
-        <button class="sm" data-act="move" data-part="${p.id}" data-loc="${pl.location_id}">Перемістити</button>
-        <button class="sm ghost" data-act="adjust" data-part="${p.id}" data-loc="${pl.location_id}">Перерахувати</button>
+        <button class="sm" data-act="out" data-product="${p.id}" data-loc="${pl.location_id}">Видати</button>
+        <button class="sm" data-act="move" data-product="${p.id}" data-loc="${pl.location_id}">Перемістити</button>
+        <button class="sm ghost" data-act="adjust" data-product="${p.id}" data-loc="${pl.location_id}">Перерахувати</button>
         <a href="#/warehouse/${pl.warehouse_id}?hit=${pl.location_id}"><button class="sm ghost">🗺 Показати на плані складу</button></a>
       </div>
     </div>`).join('')
@@ -229,6 +229,7 @@ function partCardHtml(p) {
       <div class="grow">
         <h1>${esc(p.name)} ${qtyBadge}</h1>
         <div class="muted small">
+          ${p.category_name ? `<span class="badge">${esc(p.category_parent_name ? p.category_parent_name + ' → ' : '')}${esc(p.category_name)}</span> · ` : ''}
           ${p.code ? `Артикул: <b class="mono">${esc(p.code)}</b> · ` : ''}
           ${p.oem ? `OEM: <b class="mono">${esc(p.oem)}</b> · ` : ''}
           ${[p.brand, p.car_make, p.car_model].filter(Boolean).map(esc).join(' · ')}
@@ -240,10 +241,10 @@ function partCardHtml(p) {
       </div>
     </div>
     <div class="row" style="margin-top:10px">
-      <button class="primary sm" data-act="in" data-part="${p.id}">＋ Прийняти на склад</button>
-      <button class="sm" data-act="edit-part" data-part="${p.id}">Редагувати</button>
-      <a class="sm" href="#/labels?part=${p.id}"><button class="sm">🖨 Наклейка</button></a>
-      <a class="sm" href="#/history?part=${p.id}"><button class="sm ghost">Історія</button></a>
+      <button class="primary sm" data-act="in" data-product="${p.id}">＋ Прийняти на склад</button>
+      <button class="sm" data-act="edit-product" data-product="${p.id}">Редагувати</button>
+      <a class="sm" href="#/labels?product=${p.id}"><button class="sm">🖨 Наклейка</button></a>
+      <a class="sm" href="#/history?product=${p.id}"><button class="sm ghost">Історія</button></a>
     </div>
   </div>
   <h2>Де лежить</h2>
@@ -295,7 +296,7 @@ function locationCardHtml(r) {
       <div style="text-align:center"><svg data-code="${esc(l.barcode)}" data-h="46"></svg></div>
     </div>
     <div class="row" style="margin-top:8px">
-      <button class="primary sm" data-act="in-here" data-loc="${l.id}">＋ Покласти сюди деталь</button>
+      <button class="primary sm" data-act="in-here" data-loc="${l.id}">＋ Покласти сюди товар</button>
       <button class="sm" data-act="add-box" data-loc="${l.id}" data-wh="${l.warehouse_id}">＋ Коробка всередині</button>
       <a href="#/labels?loc=${l.id}"><button class="sm">🖨 Наклейка</button></a>
     </div>
@@ -312,12 +313,12 @@ function locationCardHtml(r) {
     ${r.items.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Назва</th><th>Артикул</th><th>Місце</th><th>К-сть</th><th></th></tr></thead>
       <tbody>${r.items.map((i) => `<tr>
-        <td><a href="#/part/${i.id}">${esc(i.name)}</a></td>
+        <td><a href="#/product/${i.id}">${esc(i.name)}</a></td>
         <td class="mono small">${esc(i.code)}</td>
         <td class="small muted">${esc(i.location_label)}</td>
         <td><b>${i.qty}</b></td>
         <td class="nowrap">
-          <button class="sm" data-act="out" data-part="${i.id}" data-loc="${i.location_id}">Видати</button>
+          <button class="sm" data-act="out" data-product="${i.id}" data-loc="${i.location_id}">Видати</button>
         </td></tr>`).join('')}</tbody>
     </table></div>` : '<p class="muted">Порожньо.</p>'}
   </div>`;
@@ -344,24 +345,24 @@ function bindCardActions(root) {
   root.querySelectorAll('[data-act]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const act = btn.dataset.act;
-      const partId = Number(btn.dataset.part);
+      const productId = Number(btn.dataset.product);
       const locId = Number(btn.dataset.loc);
-      if (act === 'in') return dlgPutStock(partId);
+      if (act === 'in') return dlgPutStock(productId);
       if (act === 'in-here') return dlgPutIntoLocation(locId);
-      if (act === 'out') return dlgQty('Видати зі складу', 'out', partId, locId);
-      if (act === 'adjust') return dlgQty('Перерахунок (точна кількість у місці)', 'adjust', partId, locId);
-      if (act === 'move') return dlgMove(partId, locId);
-      if (act === 'edit-part') return dlgPart(await api(`/parts/${partId}`));
+      if (act === 'out') return dlgQty('Видати зі складу', 'out', productId, locId);
+      if (act === 'adjust') return dlgQty('Перерахунок (точна кількість у місці)', 'adjust', productId, locId);
+      if (act === 'move') return dlgMove(productId, locId);
+      if (act === 'edit-product') return dlgProduct(await api(`/products/${productId}`));
       if (act === 'add-box') return dlgAddBox(locId, Number(btn.dataset.wh));
     });
   });
 }
 
-const refreshAfter = async (partId) => {
-  if (location.hash.startsWith('#/part/')) return route();
-  if ($('#scanResult') && partId) {
-    const p = await api(`/parts/${partId}`);
-    $('#scanResult').innerHTML = partCardHtml(p);
+const refreshAfter = async (productId) => {
+  if (location.hash.startsWith('#/product/')) return route();
+  if ($('#scanResult') && productId) {
+    const p = await api(`/products/${productId}`);
+    $('#scanResult').innerHTML = productCardHtml(p);
     renderAllBarcodes($('#scanResult'));
     bindCardActions($('#scanResult'));
   } else route();
@@ -374,7 +375,7 @@ async function locationOptions(selected) {
   </option>`).join('');
 }
 
-async function dlgQty(title, kind, partId, locId) {
+async function dlgQty(title, kind, productId, locId) {
   const bg = modal(`
     <h2>${esc(title)}</h2>
     <form id="f">
@@ -388,14 +389,14 @@ async function dlgQty(title, kind, partId, locId) {
     try {
       await api('/stock/' + kind, {
         method: 'POST',
-        body: { part_id: partId, location_id: locId, qty: Number(bg.querySelector('#qty').value), note: bg.querySelector('#note').value },
+        body: { product_id: productId, location_id: locId, qty: Number(bg.querySelector('#qty').value), note: bg.querySelector('#note').value },
       });
-      closeModal(); toast('Готово', 'ok'); refreshAfter(partId);
+      closeModal(); toast('Готово', 'ok'); refreshAfter(productId);
     } catch (err) { toast(err.message, 'err'); }
   });
 }
 
-async function dlgPutStock(partId) {
+async function dlgPutStock(productId) {
   const opts = await locationOptions();
   const bg = modal(`
     <h2>Прийняти на склад</h2>
@@ -406,28 +407,28 @@ async function dlgPutStock(partId) {
       <div class="row"><button class="primary grow">Покласти</button>
         <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
     </form>
-    <p class="small muted">Порада: щоб не шукати місце у списку — відскануйте наклейку місця, і кладіть деталь звідти.</p>`);
+    <p class="small muted">Порада: щоб не шукати місце у списку — відскануйте наклейку місця, і кладіть товар звідти.</p>`);
   bg.querySelector('#f').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
       await api('/stock/in', { method: 'POST', body: {
-        part_id: partId,
+        product_id: productId,
         location_id: Number(bg.querySelector('#loc').value),
         qty: Number(bg.querySelector('#qty').value),
         note: bg.querySelector('#note').value,
       } });
-      closeModal(); toast('Покладено', 'ok'); refreshAfter(partId);
+      closeModal(); toast('Покладено', 'ok'); refreshAfter(productId);
     } catch (err) { toast(err.message, 'err'); }
   });
 }
 
 async function dlgPutIntoLocation(locId) {
-  const parts = await api('/parts' + qs({ limit: 500 }));
+  const products = await api('/products' + qs({ limit: 500 }));
   const bg = modal(`
-    <h2>Покласти деталь у це місце</h2>
+    <h2>Покласти товар у це місце</h2>
     <form id="f">
-      <label class="field"><span>Деталь</span>
-        <select id="part" required>${parts.map((p) => `<option value="${p.id}">${esc(p.name)} ${p.code ? '· ' + esc(p.code) : ''}</option>`).join('')}</select></label>
+      <label class="field"><span>Товар</span>
+        <select id="product" required>${products.map((p) => `<option value="${p.id}">${esc(p.name)} ${p.code ? '· ' + esc(p.code) : ''}</option>`).join('')}</select></label>
       <label class="field"><span>Кількість</span><input type="number" id="qty" value="1" min="1" required></label>
       <div class="row"><button class="primary grow">Покласти</button>
         <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
@@ -436,7 +437,7 @@ async function dlgPutIntoLocation(locId) {
     e.preventDefault();
     try {
       await api('/stock/in', { method: 'POST', body: {
-        part_id: Number(bg.querySelector('#part').value), location_id: locId,
+        product_id: Number(bg.querySelector('#product').value), location_id: locId,
         qty: Number(bg.querySelector('#qty').value),
       } });
       closeModal(); toast('Покладено', 'ok'); route();
@@ -444,7 +445,7 @@ async function dlgPutIntoLocation(locId) {
   });
 }
 
-async function dlgMove(partId, fromLoc) {
+async function dlgMove(productId, fromLoc) {
   const opts = await locationOptions();
   const bg = modal(`
     <h2>Перемістити в інше місце</h2>
@@ -458,11 +459,11 @@ async function dlgMove(partId, fromLoc) {
     e.preventDefault();
     try {
       await api('/stock/move', { method: 'POST', body: {
-        part_id: partId, from_location_id: fromLoc,
+        product_id: productId, from_location_id: fromLoc,
         to_location_id: Number(bg.querySelector('#to').value),
         qty: Number(bg.querySelector('#qty').value),
       } });
-      closeModal(); toast('Переміщено', 'ok'); refreshAfter(partId);
+      closeModal(); toast('Переміщено', 'ok'); refreshAfter(productId);
     } catch (err) { toast(err.message, 'err'); }
   });
 }
@@ -491,32 +492,57 @@ async function dlgAddBox(parentId, warehouseId) {
   });
 }
 
-/* ============================================================ запчастини */
+/* =============================================================== товари */
 
-async function viewParts(params) {
+// Категорії подаються плоским списком з позначкою вкладеності — так їх зручно
+// класти і в <select>, і в чіпи фільтра.
+function categoryOptions(cats, selected, emptyLabel = '— без категорії —') {
+  const roots = cats.filter((c) => !c.parent_id);
+  const orphans = cats.filter((c) => c.parent_id && !cats.some((x) => x.id === c.parent_id));
+  let html = emptyLabel === null ? '' : `<option value="">${emptyLabel}</option>`;
+  [...roots, ...orphans].forEach((r) => {
+    html += `<option value="${r.id}" ${Number(selected) === r.id ? 'selected' : ''}>${esc(r.name)}</option>`;
+    cats.filter((c) => c.parent_id === r.id).forEach((ch) => {
+      html += `<option value="${ch.id}" ${Number(selected) === ch.id ? 'selected' : ''}>&nbsp;&nbsp;└ ${esc(ch.name)}</option>`;
+    });
+  });
+  return html;
+}
+
+async function viewProducts(params) {
   const q = params.get('q') || '';
+  const cats = await api('/categories');
   app.innerHTML = `
     <div class="card">
       <div class="row">
-        <h1 class="grow">Запчастини</h1>
-        <button class="primary" id="addPart">＋ Нова запчастина</button>
+        <h1 class="grow">Товари</h1>
+        <button class="primary" id="addProduct">＋ Новий товар</button>
       </div>
-      <input id="q" placeholder="Пошук: назва, артикул, OEM, модель авто" value="${esc(q)}" autofocus>
-      <label class="small muted" style="display:block;margin-top:8px">
-        <input type="checkbox" id="low" style="width:auto"> лише те, що закінчується
-      </label>
+      <input id="q" placeholder="Пошук: назва, артикул, OEM, модель" value="${esc(q)}" autofocus>
+      <div class="row" style="margin-top:8px">
+        <label class="field grow" style="margin:0"><span>Категорія</span>
+          <select id="cat">
+            <option value="">Усі категорії</option>
+            <option value="none">Без категорії</option>
+            ${categoryOptions(cats, params.get('category'), null)}
+          </select></label>
+        <label class="small muted" style="padding-bottom:9px">
+          <input type="checkbox" id="low" style="width:auto"> лише те, що закінчується
+        </label>
+        <a href="#/categories" class="small" style="padding-bottom:11px">керувати категоріями</a>
+      </div>
     </div>
     <div class="card"><div id="list" class="table-wrap">Завантаження…</div></div>`;
 
   const load = async () => {
     const low = $('#low').checked ? '1' : '';
-    const items = await api('/parts' + qs({ q: $('#q').value, low, limit: 300 }));
+    const items = await api('/products' + qs({ q: $('#q').value, low, category: $('#cat').value, limit: 300 }));
     $('#list').innerHTML = items.length ? `<table>
-      <thead><tr><th>Назва</th><th>Артикул</th><th>Авто</th><th>Залишок</th><th>Код</th></tr></thead>
+      <thead><tr><th>Назва</th><th>Категорія</th><th>Артикул</th><th>Залишок</th><th>Код</th></tr></thead>
       <tbody>${items.map((p) => `<tr>
-        <td><a href="#/part/${p.id}">${esc(p.name)}</a></td>
+        <td><a href="#/product/${p.id}">${esc(p.name)}</a></td>
+        <td class="small">${p.category_name ? `<span class="badge">${esc(p.category_name)}</span>` : ''}</td>
         <td class="mono small">${esc(p.code)}</td>
-        <td class="small muted">${esc([p.car_make, p.car_model].filter(Boolean).join(' '))}</td>
         <td>${p.total_qty > 0
             ? `<span class="badge ${p.min_qty > 0 && p.total_qty <= p.min_qty ? 'warn' : 'ok'}">${p.total_qty}</span>`
             : '<span class="badge err">0</span>'}</td>
@@ -527,17 +553,102 @@ async function viewParts(params) {
   let timer;
   $('#q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 220); });
   $('#low').addEventListener('change', load);
-  $('#addPart').addEventListener('click', () => dlgPart(null));
+  $('#cat').addEventListener('change', load);
+  $('#addProduct').addEventListener('click', () => dlgProduct(null));
   await load();
-  if (params.get('new')) dlgPart({ name: params.get('new') });
+  if (params.get('new')) dlgProduct({ name: params.get('new') });
 }
 
-function dlgPart(p) {
-  const v = (k) => esc(p?.[k] ?? '');
+/* ---------------------------------------------------------- категорії */
+
+async function viewCategories() {
+  const cats = await api('/categories');
+  const roots = cats.filter((c) => !c.parent_id);
+
+  app.innerHTML = `
+    <div class="card">
+      <div class="row">
+        <h1 class="grow">Категорії товарів</h1>
+        <button class="primary" id="add">＋ Категорія</button>
+      </div>
+      <p class="muted small">Категорії описують, що це за товар. Додаток не прив'язаний до автозапчастин —
+        під інший бізнес просто заводите свої категорії. Всередині категорії можна створити підкатегорії.</p>
+    </div>
+    <div class="card">
+      ${roots.length ? roots.map((r) => {
+        const kids = cats.filter((c) => c.parent_id === r.id);
+        return `<div class="card" style="background:var(--panel-2)">
+          <div class="row">
+            <div class="grow"><h3><a href="#/products?category=${r.id}">${esc(r.name)}</a>
+              <span class="badge">${r.products_count} товарів</span></h3></div>
+            <button class="sm ghost" data-add-child="${r.id}">＋ підкатегорія</button>
+            <button class="sm ghost" data-edit="${r.id}">Змінити</button>
+          </div>
+          ${kids.length ? `<div class="table-wrap"><table><tbody>${kids.map((k) => `<tr>
+            <td>└ <a href="#/products?category=${k.id}">${esc(k.name)}</a></td>
+            <td><span class="badge">${k.products_count}</span></td>
+            <td class="nowrap"><button class="sm ghost" data-edit="${k.id}">Змінити</button></td>
+          </tr>`).join('')}</tbody></table></div>` : ''}
+        </div>`;
+      }).join('') : '<p class="muted">Категорій ще немає. Створіть першу.</p>'}
+    </div>`;
+
+  $('#add').addEventListener('click', () => dlgCategory(null, cats));
+  app.querySelectorAll('[data-edit]').forEach((b) =>
+    b.addEventListener('click', () => dlgCategory(cats.find((c) => c.id === Number(b.dataset.edit)), cats)));
+  app.querySelectorAll('[data-add-child]').forEach((b) =>
+    b.addEventListener('click', () => dlgCategory({ parent_id: Number(b.dataset.addChild) }, cats)));
+}
+
+function dlgCategory(c, cats) {
+  // Себе саму в батьки не пропонуємо — це створило б цикл.
+  const parents = cats.filter((x) => !x.parent_id && x.id !== c?.id);
   const bg = modal(`
-    <h2>${p?.id ? 'Редагувати запчастину' : 'Нова запчастина'}</h2>
+    <h2>${c?.id ? 'Змінити категорію' : 'Нова категорія'}</h2>
+    <form id="f">
+      <label class="field"><span>Назва *</span><input id="name" value="${esc(c?.name ?? '')}" required></label>
+      <label class="field"><span>Всередині категорії</span>
+        <select id="parent">
+          <option value="">— верхній рівень —</option>
+          ${parents.map((p) => `<option value="${p.id}" ${Number(c?.parent_id) === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select></label>
+      <div class="row"><button class="primary grow">Зберегти</button>
+        ${c?.id ? '<button type="button" class="danger" id="del">Видалити</button>' : ''}
+        <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
+    </form>`);
+
+  bg.querySelector('#f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      name: bg.querySelector('#name').value,
+      parent_id: bg.querySelector('#parent').value || null,
+    };
+    try {
+      if (c?.id) await api(`/categories/${c.id}`, { method: 'PUT', body });
+      else await api('/categories', { method: 'POST', body });
+      closeModal(); route();
+    } catch (err) { toast(err.message, 'err'); }
+  });
+
+  bg.querySelector('#del')?.addEventListener('click', async () => {
+    if (!confirm('Видалити категорію? Товари залишаться, просто без категорії.')) return;
+    await api(`/categories/${c.id}`, { method: 'DELETE' });
+    closeModal(); route();
+  });
+}
+
+async function dlgProduct(p) {
+  const v = (k) => esc(p?.[k] ?? '');
+  const cats = await api('/categories');
+  const bg = modal(`
+    <h2>${p?.id ? 'Редагувати товар' : 'Новий товар'}</h2>
     <form id="f">
       <label class="field"><span>Назва *</span><input id="name" value="${v('name')}" required></label>
+      <div class="row">
+        <label class="field grow"><span>Категорія</span>
+          <select id="category_id">${categoryOptions(cats, p?.category_id)}</select></label>
+        <a href="#/categories" class="small" style="padding-bottom:20px">керувати</a>
+      </div>
       <div class="row">
         <label class="field grow"><span>Артикул (ваш код)</span><input id="code" value="${v('code')}"></label>
         <label class="field grow"><span>OEM-номер</span><input id="oem" value="${v('oem')}"></label>
@@ -564,28 +675,29 @@ function dlgPart(p) {
     e.preventDefault();
     const body = {};
     ['name', 'code', 'oem', 'brand', 'car_make', 'car_model', 'unit', 'note'].forEach((k) => body[k] = bg.querySelector('#' + k).value);
+    body.category_id = bg.querySelector('#category_id').value || null;
     body.min_qty = Number(bg.querySelector('#min_qty').value) || 0;
     body.price = Number(bg.querySelector('#price').value) || 0;
     try {
       const saved = p?.id
-        ? await api(`/parts/${p.id}`, { method: 'PUT', body })
-        : await api('/parts', { method: 'POST', body });
+        ? await api(`/products/${p.id}`, { method: 'PUT', body })
+        : await api('/products', { method: 'POST', body });
       closeModal();
       toast('Збережено', 'ok');
-      if (!p?.id) location.hash = `#/part/${saved.id}`; else route();
+      if (!p?.id) location.hash = `#/product/${saved.id}`; else route();
     } catch (err) { toast(err.message, 'err'); }
   });
 
   bg.querySelector('#del')?.addEventListener('click', async () => {
-    if (!confirm('Видалити запчастину разом з усіма її залишками?')) return;
-    await api(`/parts/${p.id}`, { method: 'DELETE' });
-    closeModal(); toast('Видалено', 'ok'); location.hash = '#/parts';
+    if (!confirm('Видалити товар разом з усіма його залишками?')) return;
+    await api(`/products/${p.id}`, { method: 'DELETE' });
+    closeModal(); toast('Видалено', 'ok'); location.hash = '#/products';
   });
 }
 
-async function viewPart(id) {
-  const p = await api(`/parts/${id}`);
-  app.innerHTML = partCardHtml(p);
+async function viewProduct(id) {
+  const p = await api(`/products/${id}`);
+  app.innerHTML = productCardHtml(p);
   renderAllBarcodes(app);
   bindCardActions(app);
 }
@@ -601,7 +713,7 @@ async function viewWarehouses() {
         <div class="stat"><b>${d.warehouses}</b><span>складів</span></div>
         <div class="stat"><b>${d.racks}</b><span>стелажів</span></div>
         <div class="stat"><b>${d.locations}</b><span>місць</span></div>
-        <div class="stat"><b>${d.parts}</b><span>найменувань</span></div>
+        <div class="stat"><b>${d.products}</b><span>найменувань</span></div>
         <div class="stat"><b>${d.total_qty}</b><span>штук усього</span></div>
         <div class="stat"><b>${d.unplaced}</b><span>без місця</span></div>
       </div>
@@ -621,7 +733,7 @@ async function viewWarehouses() {
     </div>
     ${d.low_stock.length ? `<div class="card"><h2>Закінчується</h2>
       <div class="table-wrap"><table><tbody>${d.low_stock.map((p) => `<tr>
-        <td><a href="#/part/${p.id}">${esc(p.name)}</a></td>
+        <td><a href="#/product/${p.id}">${esc(p.name)}</a></td>
         <td><span class="badge warn">${p.total_qty} / мін ${p.min_qty}</span></td>
       </tr>`).join('')}</tbody></table></div></div>` : ''}`;
 
@@ -672,7 +784,7 @@ async function viewWarehouse(id, params = new URLSearchParams()) {
   const { warehouse: wh, racks, zones } = plan;
   planPlacing = null;
 
-  // Прийшли за посиланням «показати на плані» з картки деталі — підсвітимо потрібну комірку.
+  // Прийшли за посиланням «показати на плані» з картки товару — підсвітимо потрібну комірку.
   let hit = null;
   const hitLoc = params.get('hit');
   if (hitLoc) {
@@ -695,7 +807,7 @@ async function viewWarehouse(id, params = new URLSearchParams()) {
       </div>
     </div>
 
-    ${hit ? `<div class="hint">Шукана деталь лежить тут: <b>${esc(hit.label)}</b> — підсвічено на плані.</div>` : ''}
+    ${hit ? `<div class="hint">Шуканий товар лежить тут: <b>${esc(hit.label)}</b> — підсвічено на плані.</div>` : ''}
 
     <div class="card">
       <div class="row">
@@ -972,7 +1084,7 @@ async function viewRack(rackId) {
     ${editingRack ? `<div class="hint">
       Натисніть <b>＋</b>, щоб додати комірку саме там, де в реальності стоїть ящик.
       На комірці: <b>✎</b> перейменувати, <b>✥</b> перемістити, <b>✕</b> прибрати.
-      Комірку з товаром прибрати не вийде — спершу заберіть звідти деталі.
+      Комірку з товаром прибрати не вийде — спершу заберіть звідти товар.
     </div>
     <div class="card">
       <div class="row">
@@ -1072,22 +1184,22 @@ function dlgZone(warehouseId) {
 
 async function viewLabels(params) {
   const rackId = params.get('rack');
-  const partId = params.get('part');
+  const productId = params.get('product');
   const locId = params.get('loc');
 
   let items = [];
   if (rackId) {
     const { rack, cells } = await api(`/racks/${rackId}/grid`);
     items = cells.map((c) => ({ code: c.barcode, title: c.label, meta: rack.name }));
-  } else if (partId) {
-    const p = await api(`/parts/${partId}`);
+  } else if (productId) {
+    const p = await api(`/products/${productId}`);
     items = [{ code: p.barcode, title: p.name, meta: [p.code, p.brand].filter(Boolean).join(' · ') }];
   } else if (locId) {
     const { location } = await api(`/locations/${locId}`);
     items = [{ code: location.barcode, title: location.label, meta: location.warehouse_name }];
   }
 
-  const [whs, parts] = await Promise.all([api('/warehouses'), api('/parts' + qs({ limit: 500 }))]);
+  const [whs, products] = await Promise.all([api('/warehouses'), api('/products' + qs({ limit: 500 }))]);
 
   app.innerHTML = `
     <div class="card no-print">
@@ -1096,7 +1208,7 @@ async function viewLabels(params) {
         <label class="field grow"><span>Що друкуємо</span>
           <select id="what">
             <option value="sel">Вибрані нижче</option>
-            <option value="parts">Усі запчастини (${parts.length})</option>
+            <option value="products">Усі товари (${products.length})</option>
             ${whs.map((w) => `<option value="wh:${w.id}">Усі місця складу «${esc(w.name)}»</option>`).join('')}
           </select></label>
         <label class="field grow"><span>Формат</span>
@@ -1106,11 +1218,11 @@ async function viewLabels(params) {
           </select></label>
         <button class="primary" id="printBtn">🖨 Друк</button>
       </div>
-      <label class="field"><span>Додати вручну (пошук по запчастинах)</span>
+      <label class="field"><span>Додати вручну (пошук по товарах)</span>
         <select id="pick"><option value="">— вибрати —</option>
-          ${parts.map((p) => `<option value="${p.id}">${esc(p.name)} ${p.code ? '· ' + esc(p.code) : ''}</option>`).join('')}
+          ${products.map((p) => `<option value="${p.id}">${esc(p.name)} ${p.code ? '· ' + esc(p.code) : ''}</option>`).join('')}
         </select></label>
-      <p class="small muted">Порада: наклейку місця клейте на полицю/коробку, наклейку деталі — на саму деталь або пакет.
+      <p class="small muted">Порада: наклейку місця клейте на полицю/коробку, наклейку товару — на сам товар або пакет.
         Кількість на наклейці навмисно не друкується — вона змінюється, а наклейка ні.</p>
     </div>
     <div class="card"><div id="sheet" class="labels-preview"></div></div>`;
@@ -1129,8 +1241,8 @@ async function viewLabels(params) {
 
   $('#what').addEventListener('change', async () => {
     const v = $('#what').value;
-    if (v === 'parts') {
-      items = parts.map((p) => ({ code: p.barcode, title: p.name, meta: p.code || '' }));
+    if (v === 'products') {
+      items = products.map((p) => ({ code: p.barcode, title: p.name, meta: p.code || '' }));
     } else if (v.startsWith('wh:')) {
       const locs = await api('/locations' + qs({ warehouse_id: v.slice(3) }));
       items = locs.map((l) => ({ code: l.barcode, title: l.label, meta: l.rack_name || '' }));
@@ -1139,7 +1251,7 @@ async function viewLabels(params) {
   });
 
   $('#pick').addEventListener('change', () => {
-    const p = parts.find((x) => x.id === Number($('#pick').value));
+    const p = products.find((x) => x.id === Number($('#pick').value));
     if (p) { items.push({ code: p.barcode, title: p.name, meta: p.code || '' }); render(); }
   });
 
@@ -1151,18 +1263,18 @@ async function viewLabels(params) {
 /* ============================================================ історія */
 
 async function viewHistory(params) {
-  const partId = params.get('part');
-  const rows = await api('/movements' + qs({ part_id: partId, limit: 300 }));
+  const productId = params.get('product');
+  const rows = await api('/movements' + qs({ product_id: productId, limit: 300 }));
   const T = { in: '＋ прихід', out: '− видача', move: '→ переміщення', adjust: '= перерахунок' };
   app.innerHTML = `
     <div class="card">
-      <h1>Історія рухів${partId ? ' (одна деталь)' : ''}</h1>
+      <h1>Історія рухів${productId ? ' (один товар)' : ''}</h1>
       ${rows.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Коли</th><th>Що</th><th>Деталь</th><th>Звідки</th><th>Куди</th><th>К-сть</th><th>Коментар</th></tr></thead>
+        <thead><tr><th>Коли</th><th>Що</th><th>Товар</th><th>Звідки</th><th>Куди</th><th>К-сть</th><th>Коментар</th></tr></thead>
         <tbody>${rows.map((m) => `<tr>
           <td class="small nowrap">${esc(m.ts)}</td>
           <td class="small nowrap">${T[m.type] || m.type}</td>
-          <td>${m.part_id ? `<a href="#/part/${m.part_id}">${esc(m.part_name)}</a>` : '<span class="muted">видалено</span>'}</td>
+          <td>${m.product_id ? `<a href="#/product/${m.product_id}">${esc(m.product_name)}</a>` : '<span class="muted">видалено</span>'}</td>
           <td class="small muted">${esc(m.from_label || '')}</td>
           <td class="small muted">${esc(m.to_label || '')}</td>
           <td><b>${m.qty}</b></td>
@@ -1204,7 +1316,7 @@ async function viewIntegrations() {
       <pre class="mono small" style="white-space:pre-wrap;background:var(--panel-2);padding:12px;border-radius:10px">
 # Чи є на складі і де лежить (за артикулом магазину)
 curl -H "X-Api-Key: sk_..." \\
-  "${origin}/api/v1/parts/lookup?sku=7700123456"
+  "${origin}/api/v1/products/lookup?sku=7700123456"
 
 # Наявність одразу для списку товарів
 curl -X POST -H "X-Api-Key: sk_..." -H "Content-Type: application/json" \\
@@ -1216,10 +1328,10 @@ curl -X POST -H "X-Api-Key: sk_..." -H "Content-Type: application/json" \\
   -d '{"sku":"7700123456","qty":1,"note":"замовлення №123"}' \\
   ${origin}/api/v1/stock/out
 
-# Прив'язати товар магазину до нашої деталі
+# Прив'язати товар магазину до нашого товару
 curl -X POST -H "X-Api-Key: sk_..." -H "Content-Type: application/json" \\
   -d '{"sku":"7700123456","external_id":"42","external_url":"https://shop/p/42"}' \\
-  ${origin}/api/v1/parts/link
+  ${origin}/api/v1/products/link
 
 # Де лежить (для схеми)
 curl -H "X-Api-Key: sk_..." "${origin}/api/v1/locate?code=7700123456"</pre>
@@ -1271,19 +1383,20 @@ async function route() {
   const raw = location.hash.slice(1) || '/scan';
   const [path, query] = raw.split('?');
   const params = new URLSearchParams(query || '');
-  const parts = path.split('/').filter(Boolean);
+  const seg = path.split('/').filter(Boolean);
 
   document.querySelectorAll('header.top nav a').forEach((a) =>
-    a.classList.toggle('active', a.getAttribute('href') === '#/' + parts[0]));
+    a.classList.toggle('active', a.getAttribute('href') === '#/' + seg[0]));
 
   try {
-    switch (parts[0]) {
+    switch (seg[0]) {
       case 'scan': return viewScan();
-      case 'parts': return viewParts(params);
-      case 'part': return viewPart(parts[1]);
+      case 'products': return viewProducts(params);
+      case 'categories': return viewCategories();
+      case 'product': return viewProduct(seg[1]);
       case 'warehouses': return viewWarehouses();
-      case 'warehouse': return viewWarehouse(parts[1], params);
-      case 'rack': return viewRack(parts[1]);
+      case 'warehouse': return viewWarehouse(seg[1], params);
+      case 'rack': return viewRack(seg[1]);
       case 'labels': return viewLabels(params);
       case 'history': return viewHistory(params);
       case 'integrations': return viewIntegrations();

@@ -1,6 +1,6 @@
 'use strict';
 
-const { db, newPartBarcode, newLocationBarcode } = require('../db');
+const { db, newProductBarcode, newLocationBarcode } = require('../db');
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -192,7 +192,7 @@ function rackGrid(rackId) {
   const cells = db.prepare(`
     SELECT l.*,
            (SELECT COALESCE(SUM(s.qty), 0) FROM stock s WHERE s.location_id = l.id) AS qty,
-           (SELECT COUNT(*) FROM stock s WHERE s.location_id = l.id AND s.qty > 0) AS parts_count,
+           (SELECT COUNT(*) FROM stock s WHERE s.location_id = l.id AND s.qty > 0) AS products_count,
            (SELECT COUNT(*) FROM locations b WHERE b.parent_id = l.id) AS boxes_count
       FROM locations l
      WHERE l.rack_id = ? AND l.kind = 'cell'
@@ -273,7 +273,7 @@ function locationContents(id) {
   const items = db.prepare(`
     SELECT s.qty, p.*, l.label AS location_label, l.id AS location_id
       FROM stock s
-      JOIN parts p ON p.id = s.part_id
+      JOIN products p ON p.id = s.product_id
       JOIN locations l ON l.id = s.location_id
      WHERE (s.location_id = ? OR l.parent_id = ?) AND s.qty > 0
      ORDER BY p.name
@@ -285,12 +285,55 @@ function locationContents(id) {
   return { location: loc, items, boxes };
 }
 
-/* ----------------------------------------------------------------- parts */
+/* ------------------------------------------------------------ categories */
 
-const partRow = (id) => db.prepare('SELECT * FROM parts WHERE id = ?').get(id);
+// Дерево категорій на два рівні: батьківська + підкатегорії.
+const listCategories = () => db.prepare(`
+  SELECT c.*, p.name AS parent_name,
+         (SELECT COUNT(*) FROM products pr WHERE pr.category_id = c.id) AS products_count,
+         (SELECT COUNT(*) FROM categories ch WHERE ch.parent_id = c.id) AS children_count
+    FROM categories c
+    LEFT JOIN categories p ON p.id = c.parent_id
+   ORDER BY COALESCE(p.name, c.name), c.sort, c.name
+`).all();
 
-// Де саме лежить деталь: повний шлях склад → стелаж → комірка → коробка + координати для схеми.
-const partPlacements = (partId) => db.prepare(`
+const getCategory = (id) => db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
+
+const createCategory = ({ name, parent_id = null, color = '', sort = 0 }) => {
+  const info = db.prepare('INSERT INTO categories(name, parent_id, color, sort) VALUES(?, ?, ?, ?)')
+    .run(name, parent_id || null, color, sort | 0);
+  return getCategory(info.lastInsertRowid);
+};
+
+const updateCategory = (id, { name, parent_id = null, color = '', sort = 0 }) => {
+  // Категорія не може бути власним батьком — інакше дерево зациклиться.
+  const pid = Number(parent_id) === Number(id) ? null : (parent_id || null);
+  db.prepare('UPDATE categories SET name = ?, parent_id = ?, color = ?, sort = ? WHERE id = ?')
+    .run(name, pid, color, sort | 0, id);
+  return getCategory(id);
+};
+
+// Видалення категорії не чіпає товари: вони просто лишаються без категорії.
+const deleteCategory = (id) => db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+
+// Категорія + усі її підкатегорії — щоб фільтр по батьківській показував і дочірні товари.
+const categoryWithChildren = (id) => {
+  const kids = db.prepare('SELECT id FROM categories WHERE parent_id = ?').all(id).map((c) => c.id);
+  return [Number(id), ...kids];
+};
+
+/* -------------------------------------------------------------- products */
+
+const productRow = (id) => db.prepare(`
+  SELECT p.*, c.name AS category_name, c.color AS category_color, pc.name AS category_parent_name
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.category_id
+    LEFT JOIN categories pc ON pc.id = c.parent_id
+   WHERE p.id = ?
+`).get(id);
+
+// Де саме лежить товар: повний шлях склад → стелаж → комірка → коробка + координати для схеми.
+const productPlacements = (productId) => db.prepare(`
   SELECT s.qty, l.id AS location_id, l.label, l.kind, l.row_idx, l.col_idx, l.barcode AS location_barcode,
          r.id AS rack_id, r.name AS rack_name, r.rows, r.cols,
          w.id AS warehouse_id, w.name AS warehouse_name,
@@ -300,53 +343,54 @@ const partPlacements = (partId) => db.prepare(`
     LEFT JOIN locations pl ON pl.id = l.parent_id
     LEFT JOIN racks r ON r.id = COALESCE(l.rack_id, pl.rack_id)
     JOIN warehouses w ON w.id = l.warehouse_id
-   WHERE s.part_id = ? AND s.qty > 0
+   WHERE s.product_id = ? AND s.qty > 0
    ORDER BY w.name, r.name, l.label
-`).all(partId);
+`).all(productId);
 
-function partFull(id) {
-  const part = partRow(id);
-  if (!part) return null;
-  const placements = partPlacements(id);
+function productFull(id) {
+  const product = productRow(id);
+  if (!product) return null;
+  const placements = productPlacements(id);
   const links = db.prepare(`
     SELECT pl.*, i.name AS integration_name, i.slug AS integration_slug
-      FROM part_links pl JOIN integrations i ON i.id = pl.integration_id
-     WHERE pl.part_id = ?
+      FROM product_links pl JOIN integrations i ON i.id = pl.integration_id
+     WHERE pl.product_id = ?
   `).all(id);
   return {
-    ...part,
+    ...product,
     total_qty: placements.reduce((s, p) => s + p.qty, 0),
     placements,
     links,
   };
 }
 
-const createPart = (p) => {
+const createProduct = (p) => {
   const info = db.prepare(`
-    INSERT INTO parts(barcode, code, oem, name, brand, car_make, car_model, unit, min_qty, price, note)
-    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO products(barcode, code, oem, name, brand, category_id, car_make, car_model, unit, min_qty, price, note)
+    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    p.barcode || newPartBarcode(), p.code || '', p.oem || '', p.name, p.brand || '',
-    p.car_make || '', p.car_model || '', p.unit || 'шт', p.min_qty || 0, p.price || 0, p.note || ''
+    p.barcode || newProductBarcode(), p.code || '', p.oem || '', p.name, p.brand || '',
+    p.category_id || null, p.car_make || '', p.car_model || '', p.unit || 'шт',
+    p.min_qty || 0, p.price || 0, p.note || ''
   );
-  return partFull(info.lastInsertRowid);
+  return productFull(info.lastInsertRowid);
 };
 
-const updatePart = (id, p) => {
+const updateProduct = (id, p) => {
   db.prepare(`
-    UPDATE parts SET code = ?, oem = ?, name = ?, brand = ?, car_make = ?, car_model = ?,
-                     unit = ?, min_qty = ?, price = ?, note = ?
+    UPDATE products SET code = ?, oem = ?, name = ?, brand = ?, category_id = ?,
+                        car_make = ?, car_model = ?, unit = ?, min_qty = ?, price = ?, note = ?
      WHERE id = ?
   `).run(
-    p.code || '', p.oem || '', p.name, p.brand || '', p.car_make || '', p.car_model || '',
-    p.unit || 'шт', p.min_qty || 0, p.price || 0, p.note || '', id
+    p.code || '', p.oem || '', p.name, p.brand || '', p.category_id || null,
+    p.car_make || '', p.car_model || '', p.unit || 'шт', p.min_qty || 0, p.price || 0, p.note || '', id
   );
-  return partFull(id);
+  return productFull(id);
 };
 
-const deletePart = (id) => db.prepare('DELETE FROM parts WHERE id = ?').run(id);
+const deleteProduct = (id) => db.prepare('DELETE FROM products WHERE id = ?').run(id);
 
-function searchParts({ q = '', limit = 100, offset = 0, lowStock = false } = {}) {
+function searchProducts({ q = '', limit = 100, offset = 0, lowStock = false, categoryId = null, uncategorized = false } = {}) {
   const like = `%${q.trim()}%`;
   const where = [];
   const args = [];
@@ -354,10 +398,20 @@ function searchParts({ q = '', limit = 100, offset = 0, lowStock = false } = {})
     where.push('(p.name LIKE ? OR p.code LIKE ? OR p.oem LIKE ? OR p.barcode LIKE ? OR p.brand LIKE ? OR p.car_model LIKE ?)');
     args.push(like, like, like, like, like, like);
   }
+  if (uncategorized) {
+    where.push('p.category_id IS NULL');
+  } else if (categoryId) {
+    // Фільтр по батьківській категорії має показувати й товари з її підкатегорій.
+    const ids = categoryWithChildren(categoryId);
+    where.push(`p.category_id IN (${ids.map(() => '?').join(',')})`);
+    args.push(...ids);
+  }
   let sql = `
     SELECT * FROM (
-      SELECT p.*, COALESCE((SELECT SUM(s.qty) FROM stock s WHERE s.part_id = p.id), 0) AS total_qty
-        FROM parts p
+      SELECT p.*, c.name AS category_name, c.color AS category_color,
+             COALESCE((SELECT SUM(s.qty) FROM stock s WHERE s.product_id = p.id), 0) AS total_qty
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
        ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     )
   `;
@@ -369,83 +423,83 @@ function searchParts({ q = '', limit = 100, offset = 0, lowStock = false } = {})
 
 /* ----------------------------------------------------------------- stock */
 
-const getQty = (partId, locId) => {
-  const row = db.prepare('SELECT qty FROM stock WHERE part_id = ? AND location_id = ?').get(partId, locId);
+const getQty = (productId, locId) => {
+  const row = db.prepare('SELECT qty FROM stock WHERE product_id = ? AND location_id = ?').get(productId, locId);
   return row ? row.qty : 0;
 };
 
-const setQty = (partId, locId, qty) => {
+const setQty = (productId, locId, qty) => {
   if (qty <= 0) {
-    db.prepare('DELETE FROM stock WHERE part_id = ? AND location_id = ?').run(partId, locId);
+    db.prepare('DELETE FROM stock WHERE product_id = ? AND location_id = ?').run(productId, locId);
   } else {
     db.prepare(`
-      INSERT INTO stock(part_id, location_id, qty) VALUES(?, ?, ?)
-      ON CONFLICT(part_id, location_id) DO UPDATE SET qty = excluded.qty
-    `).run(partId, locId, qty);
+      INSERT INTO stock(product_id, location_id, qty) VALUES(?, ?, ?)
+      ON CONFLICT(product_id, location_id) DO UPDATE SET qty = excluded.qty
+    `).run(productId, locId, qty);
   }
 };
 
-const logMove = (type, partId, fromLoc, toLoc, qty, note) =>
-  db.prepare('INSERT INTO movements(type, part_id, from_loc_id, to_loc_id, qty, note) VALUES(?, ?, ?, ?, ?, ?)')
-    .run(type, partId, fromLoc, toLoc, qty, note || '');
+const logMove = (type, productId, fromLoc, toLoc, qty, note) =>
+  db.prepare('INSERT INTO movements(type, product_id, from_loc_id, to_loc_id, qty, note) VALUES(?, ?, ?, ?, ?, ?)')
+    .run(type, productId, fromLoc, toLoc, qty, note || '');
 
 // Прихід: поклали qty штук деталі у місце.
-const stockIn = db.transaction((partId, locId, qty, note) => {
-  setQty(partId, locId, getQty(partId, locId) + qty);
-  logMove('in', partId, null, locId, qty, note);
-  pushOutbox('stock.changed', { part_id: partId, total_qty: totalQty(partId) });
-  return partFull(partId);
+const stockIn = db.transaction((productId, locId, qty, note) => {
+  setQty(productId, locId, getQty(productId, locId) + qty);
+  logMove('in', productId, null, locId, qty, note);
+  pushOutbox('stock.changed', { product_id: productId, total_qty: totalQty(productId) });
+  return productFull(productId);
 });
 
 // Видача: зняли qty штук з місця. Кидає помилку, якщо стільки немає.
-const stockOut = db.transaction((partId, locId, qty, note) => {
-  const have = getQty(partId, locId);
+const stockOut = db.transaction((productId, locId, qty, note) => {
+  const have = getQty(productId, locId);
   if (have < qty) throw new Error(`У цьому місці лише ${have} шт, а списати треба ${qty}`);
-  setQty(partId, locId, have - qty);
-  logMove('out', partId, locId, null, qty, note);
-  pushOutbox('stock.changed', { part_id: partId, total_qty: totalQty(partId) });
-  return partFull(partId);
+  setQty(productId, locId, have - qty);
+  logMove('out', productId, locId, null, qty, note);
+  pushOutbox('stock.changed', { product_id: productId, total_qty: totalQty(productId) });
+  return productFull(productId);
 });
 
 // Переміщення між місцями.
-const stockMove = db.transaction((partId, fromLoc, toLoc, qty, note) => {
-  const have = getQty(partId, fromLoc);
+const stockMove = db.transaction((productId, fromLoc, toLoc, qty, note) => {
+  const have = getQty(productId, fromLoc);
   if (have < qty) throw new Error(`У місці-джерелі лише ${have} шт`);
-  setQty(partId, fromLoc, have - qty);
-  setQty(partId, toLoc, getQty(partId, toLoc) + qty);
-  logMove('move', partId, fromLoc, toLoc, qty, note);
-  return partFull(partId);
+  setQty(productId, fromLoc, have - qty);
+  setQty(productId, toLoc, getQty(productId, toLoc) + qty);
+  logMove('move', productId, fromLoc, toLoc, qty, note);
+  return productFull(productId);
 });
 
 // Інвентаризація: виставили точну кількість у місці.
-const stockAdjust = db.transaction((partId, locId, qty, note) => {
-  const before = getQty(partId, locId);
-  setQty(partId, locId, qty);
-  logMove('adjust', partId, locId, locId, qty - before, note || `Інвентаризація: було ${before}, стало ${qty}`);
-  pushOutbox('stock.changed', { part_id: partId, total_qty: totalQty(partId) });
-  return partFull(partId);
+const stockAdjust = db.transaction((productId, locId, qty, note) => {
+  const before = getQty(productId, locId);
+  setQty(productId, locId, qty);
+  logMove('adjust', productId, locId, locId, qty - before, note || `Інвентаризація: було ${before}, стало ${qty}`);
+  pushOutbox('stock.changed', { product_id: productId, total_qty: totalQty(productId) });
+  return productFull(productId);
 });
 
-const totalQty = (partId) => {
-  const r = db.prepare('SELECT COALESCE(SUM(qty), 0) AS q FROM stock WHERE part_id = ?').get(partId);
+const totalQty = (productId) => {
+  const r = db.prepare('SELECT COALESCE(SUM(qty), 0) AS q FROM stock WHERE product_id = ?').get(productId);
   return r.q;
 };
 
-const listMovements = ({ partId = null, limit = 200 } = {}) => db.prepare(`
-  SELECT m.*, p.name AS part_name, p.barcode AS part_barcode,
+const listMovements = ({ productId = null, limit = 200 } = {}) => db.prepare(`
+  SELECT m.*, p.name AS product_name, p.barcode AS product_barcode,
          fl.label AS from_label, tl.label AS to_label
     FROM movements m
-    LEFT JOIN parts p ON p.id = m.part_id
+    LEFT JOIN products p ON p.id = m.product_id
     LEFT JOIN locations fl ON fl.id = m.from_loc_id
     LEFT JOIN locations tl ON tl.id = m.to_loc_id
-   WHERE (? IS NULL OR m.part_id = ?)
+   WHERE (? IS NULL OR m.product_id = ?)
    ORDER BY m.id DESC LIMIT ?
-`).all(partId, partId, limit);
+`).all(productId, productId, limit);
 
 /* ------------------------------------------------------------- сканування */
 
 // Одна точка входу для сканера й ручного пошуку.
-// Повертає { type: 'part'|'location'|'many'|'none', ... }
+// Повертає { type: 'product'|'location'|'many'|'none', ... }
 function resolveCode(raw) {
   const code = String(raw || '').trim();
   if (!code) return { type: 'none', query: code };
@@ -453,14 +507,14 @@ function resolveCode(raw) {
   const loc = db.prepare('SELECT id FROM locations WHERE barcode = ?').get(code);
   if (loc) return { type: 'location', ...locationContents(loc.id) };
 
-  const byBarcode = db.prepare('SELECT id FROM parts WHERE barcode = ?').get(code);
-  if (byBarcode) return { type: 'part', part: partFull(byBarcode.id) };
+  const byBarcode = db.prepare('SELECT id FROM products WHERE barcode = ?').get(code);
+  if (byBarcode) return { type: 'product', product: productFull(byBarcode.id) };
 
-  const exact = db.prepare('SELECT id FROM parts WHERE code = ? OR oem = ? LIMIT 2').all(code, code);
-  if (exact.length === 1) return { type: 'part', part: partFull(exact[0].id) };
+  const exact = db.prepare('SELECT id FROM products WHERE code = ? OR oem = ? LIMIT 2').all(code, code);
+  if (exact.length === 1) return { type: 'product', product: productFull(exact[0].id) };
 
-  const found = searchParts({ q: code, limit: 50 });
-  if (found.length === 1) return { type: 'part', part: partFull(found[0].id) };
+  const found = searchProducts({ q: code, limit: 50 });
+  if (found.length === 1) return { type: 'product', product: productFull(found[0].id) };
   if (found.length > 1) return { type: 'many', query: code, results: found };
   return { type: 'none', query: code };
 }
@@ -470,7 +524,7 @@ function resolveCode(raw) {
 const crypto = require('crypto');
 
 const listIntegrations = () => db.prepare(`
-  SELECT i.*, (SELECT COUNT(*) FROM part_links pl WHERE pl.integration_id = i.id) AS links_count
+  SELECT i.*, (SELECT COUNT(*) FROM product_links pl WHERE pl.integration_id = i.id) AS links_count
     FROM integrations i ORDER BY i.name
 `).all();
 
@@ -498,28 +552,28 @@ const deleteIntegration = (id) => db.prepare('DELETE FROM integrations WHERE id 
 const integrationByKey = (key) =>
   db.prepare('SELECT * FROM integrations WHERE api_key = ? AND enabled = 1').get(key);
 
-const linkPart = ({ part_id, integration_id, external_id, external_sku = '', external_url = '' }) => {
+const linkProduct = ({ product_id, integration_id, external_id, external_sku = '', external_url = '' }) => {
   db.prepare(`
-    INSERT INTO part_links(part_id, integration_id, external_id, external_sku, external_url)
+    INSERT INTO product_links(product_id, integration_id, external_id, external_sku, external_url)
     VALUES(?, ?, ?, ?, ?)
     ON CONFLICT(integration_id, external_id)
-    DO UPDATE SET part_id = excluded.part_id, external_sku = excluded.external_sku, external_url = excluded.external_url
-  `).run(part_id, integration_id, String(external_id), external_sku, external_url);
-  return partFull(part_id);
+    DO UPDATE SET product_id = excluded.product_id, external_sku = excluded.external_sku, external_url = excluded.external_url
+  `).run(product_id, integration_id, String(external_id), external_sku, external_url);
+  return productFull(product_id);
 };
 
-const unlinkPart = (linkId) => db.prepare('DELETE FROM part_links WHERE id = ?').run(linkId);
+const unlinkProduct = (linkId) => db.prepare('DELETE FROM product_links WHERE id = ?').run(linkId);
 
 // Пошук деталі за ідентифікатором із зовнішньої системи: спершу явний зв'язок, далі артикул/OEM.
 function findByExternal(integrationId, { external_id, sku }) {
   if (external_id) {
-    const link = db.prepare('SELECT part_id FROM part_links WHERE integration_id = ? AND external_id = ?')
+    const link = db.prepare('SELECT product_id FROM product_links WHERE integration_id = ? AND external_id = ?')
       .get(integrationId, String(external_id));
-    if (link) return partFull(link.part_id);
+    if (link) return productFull(link.product_id);
   }
   if (sku) {
-    const p = db.prepare('SELECT id FROM parts WHERE code = ? OR oem = ? OR barcode = ? LIMIT 1').get(sku, sku, sku);
-    if (p) return partFull(p.id);
+    const p = db.prepare('SELECT id FROM products WHERE code = ? OR oem = ? OR barcode = ? LIMIT 1').get(sku, sku, sku);
+    if (p) return productFull(p.id);
   }
   return null;
 }
@@ -532,10 +586,10 @@ function dashboard() {
     warehouses: one('SELECT COUNT(*) AS v FROM warehouses'),
     racks: one('SELECT COUNT(*) AS v FROM racks'),
     locations: one('SELECT COUNT(*) AS v FROM locations'),
-    parts: one('SELECT COUNT(*) AS v FROM parts'),
+    products: one('SELECT COUNT(*) AS v FROM products'),
     total_qty: one('SELECT COALESCE(SUM(qty), 0) AS v FROM stock'),
-    unplaced: one('SELECT COUNT(*) AS v FROM parts p WHERE NOT EXISTS (SELECT 1 FROM stock s WHERE s.part_id = p.id AND s.qty > 0)'),
-    low_stock: searchParts({ lowStock: true, limit: 20 }),
+    unplaced: one('SELECT COUNT(*) AS v FROM products p WHERE NOT EXISTS (SELECT 1 FROM stock s WHERE s.product_id = p.id AND s.qty > 0)'),
+    low_stock: searchProducts({ lowStock: true, limit: 20 }),
     recent: listMovements({ limit: 15 }),
   };
 }
@@ -547,10 +601,11 @@ module.exports = {
   addCell, addCellRow, removeCell, moveCell, setRackPosition,
   warehousePlan, updateWarehousePlan,
   listLocations, createLocation, updateLocation, deleteLocation, locationFull, locationContents,
-  searchParts, partFull, createPart, updatePart, deletePart, partPlacements,
+  searchProducts, productFull, createProduct, updateProduct, deleteProduct, productPlacements,
+  listCategories, getCategory, createCategory, updateCategory, deleteCategory,
   stockIn, stockOut, stockMove, stockAdjust, getQty, totalQty, listMovements,
   resolveCode,
   listIntegrations, createIntegration, updateIntegration, rotateIntegrationKey, deleteIntegration,
-  integrationByKey, linkPart, unlinkPart, findByExternal,
+  integrationByKey, linkProduct, unlinkProduct, findByExternal,
   dashboard,
 };
