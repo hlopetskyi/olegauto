@@ -267,7 +267,7 @@ async function renderUsers(box) {
   box.querySelectorAll('[data-edituser]').forEach((b) => b.addEventListener('click', () =>
     dlgUser(users.find((u) => u.id === Number(b.dataset.edituser)), roles)));
   box.querySelectorAll('[data-deluser]').forEach((b) => b.addEventListener('click', async () => {
-    if (!confirm('Видалити користувача? Його записи в історії залишаться.')) return;
+    if (!confirm('Видалити користувача? Його записи в історії залишаться — там зберігається ім\'я текстом.')) return;
     try { await api(`/users/${b.dataset.deluser}`, { method: 'DELETE' }); route(); }
     catch (e) { toast(e.message, 'err'); }
   }));

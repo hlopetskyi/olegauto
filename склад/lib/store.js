@@ -851,14 +851,18 @@ const updateUser = (id, { name, role, active, password }) => {
   return userById(id);
 };
 
-const deleteUser = (id) => {
+const deleteUser = db.transaction((id) => {
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!u) return { ok: true };
   const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1").get().n;
   if (u.role === 'admin' && u.active && admins <= 1) throw new Error('Це останній адміністратор — його не можна видалити');
+
+  // Записи в історії посилаються на користувача. Відв'язуємо їх, а не видаляємо:
+  // ім'я автора там продубльоване текстом, тож історія лишається читабельною.
+  const moves = db.prepare('UPDATE movements SET user_id = NULL WHERE user_id = ?').run(id).changes;
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
-  return { ok: true };
-};
+  return { ok: true, movements_kept: moves };
+});
 
 const touchLogin = (id) => db.prepare("UPDATE users SET last_login = datetime('now','localtime') WHERE id = ?").run(id);
 
