@@ -814,36 +814,34 @@ const makeMainPhoto = db.transaction((id) => {
 /* -------------------------------------------------------------- користувачі */
 
 const listUsers = () =>
-  db.prepare('SELECT id, login, name, role, active, created_at, last_login FROM users ORDER BY login').all();
+  db.prepare('SELECT id, login, name, active, created_at, last_login FROM users ORDER BY login').all();
 
 const userByLogin = (login) =>
   db.prepare('SELECT * FROM users WHERE login = ? AND active = 1').get(String(login || '').trim().toLowerCase());
 
 const userById = (id) =>
-  db.prepare('SELECT id, login, name, role, active FROM users WHERE id = ?').get(id);
+  db.prepare('SELECT id, login, name, active FROM users WHERE id = ?').get(id);
 
 const usersCount = () => db.prepare('SELECT COUNT(*) AS n FROM users WHERE active = 1').get().n;
 
-const createUser = ({ login, name = '', password, role = 'worker' }) => {
+const createUser = ({ login, name = '', password }) => {
   const l = String(login || '').trim().toLowerCase();
   if (!/^[a-z0-9._-]{3,}$/.test(l)) throw new Error('Логін: щонайменше 3 символи, латиниця, цифри, крапка, дефіс');
   if (!password || String(password).length < 6) throw new Error('Пароль має бути щонайменше 6 символів');
   if (db.prepare('SELECT 1 FROM users WHERE login = ?').get(l)) throw new Error('Такий логін уже є');
-  const info = db.prepare('INSERT INTO users(login, name, password_hash, role) VALUES(?, ?, ?, ?)')
-    .run(l, name, hashPassword(password), ROLES[role] ? role : 'worker');
+  const info = db.prepare('INSERT INTO users(login, name, password_hash) VALUES(?, ?, ?)')
+    .run(l, name, hashPassword(password));
   return userById(info.lastInsertRowid);
 };
 
-const updateUser = (id, { name, role, active, password }) => {
+const updateUser = (id, { name, active, password }) => {
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!u) throw new Error('Користувача не знайдено');
-  // Останнього активного адміністратора не можна ні розжалувати, ні вимкнути —
-  // інакше в додаток більше ніхто не зайде.
-  const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1").get().n;
-  const losingAdmin = u.role === 'admin' && u.active && ((role && role !== 'admin') || active === 0 || active === false);
-  if (losingAdmin && admins <= 1) throw new Error('Це останній адміністратор — залиште хоча б одного');
-  db.prepare('UPDATE users SET name = ?, role = ?, active = ? WHERE id = ?')
-    .run(name ?? u.name, ROLES[role] ? role : u.role, active === undefined ? u.active : (active ? 1 : 0), id);
+  // Останнього активного користувача не вимикаємо: інакше в додаток ніхто не зайде.
+  const turningOff = u.active && (active === 0 || active === false);
+  if (turningOff && usersCount() <= 1) throw new Error('Це останній користувач — залиште хоча б одного активного');
+  db.prepare('UPDATE users SET name = ?, active = ? WHERE id = ?')
+    .run(name ?? u.name, active === undefined ? u.active : (active ? 1 : 0), id);
   if (password) {
     if (String(password).length < 6) throw new Error('Пароль має бути щонайменше 6 символів');
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), id);
@@ -854,8 +852,7 @@ const updateUser = (id, { name, role, active, password }) => {
 const deleteUser = db.transaction((id) => {
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!u) return { ok: true };
-  const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1").get().n;
-  if (u.role === 'admin' && u.active && admins <= 1) throw new Error('Це останній адміністратор — його не можна видалити');
+  if (u.active && usersCount() <= 1) throw new Error('Це останній користувач — його не можна видалити');
 
   // Записи в історії посилаються на користувача. Відв'язуємо їх, а не видаляємо:
   // ім'я автора там продубльоване текстом, тож історія лишається читабельною.
@@ -865,19 +862,6 @@ const deleteUser = db.transaction((id) => {
 });
 
 const touchLogin = (id) => db.prepare("UPDATE users SET last_login = datetime('now','localtime') WHERE id = ?").run(id);
-
-// Права ролей. Перевірка одна на весь додаток, щоб не розповзалась по роутах.
-const ROLES = {
-  admin: { label: 'Адміністратор', can: () => true },
-  worker: {
-    label: 'Комірник',
-    can: (action) => ['read', 'stock', 'product_edit'].includes(action),
-  },
-  viewer: { label: 'Перегляд', can: (action) => action === 'read' },
-};
-
-const roleCan = (role, action) => !!(ROLES[role] || ROLES.viewer).can(action);
-const listRoles = () => Object.entries(ROLES).map(([key, v]) => ({ key, label: v.label }));
 
 /* ---------------------------------------------------------- налаштування */
 
@@ -987,7 +971,7 @@ module.exports = {
   productBarcodes, setProductBarcodes,
   productPhotos, addPhoto, getPhoto, deletePhoto, makeMainPhoto,
   listUsers, userByLogin, userById, usersCount, createUser, updateUser, deleteUser, touchLogin,
-  roleCan, listRoles, setActor,
+  setActor,
   hashPassword, verifyPassword, getPasswordHash, setPassword, sessionSalt, rotateSessionSalt,
   listIntegrations, createIntegration, updateIntegration, rotateIntegrationKey, deleteIntegration,
   integrationByKey, linkProduct, unlinkProduct, findByExternal,

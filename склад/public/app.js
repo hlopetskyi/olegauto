@@ -77,8 +77,7 @@ const renderAllBarcodes = (root = document) =>
 
 let SETTINGS = null;
 let productsView = localStorage.getItem('inventa_products_view') || 'grid';
-let ME = { authed: false, user: null, can: { admin: false, stock: false, product_edit: false } };
-const can = (what) => !!ME.can?.[what];
+let ME = { authed: false, user: null };
 
 // Тема, акцент і назва — єдине місце, де вони застосовуються до сторінки.
 // Читабельність тексту на кнопці залежить від яскравості акценту:
@@ -130,17 +129,6 @@ const NO_PHOTO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const ACCENTS = ['#3d6df0', '#0e9f6e', '#7c5cff', '#f2762e', '#e0397a', '#0d9bb5'];
 
 async function viewSettings(seg) {
-  // Меню цей пункт комірнику не показує, але адресу можна ввести руками —
-  // краще пояснити, ніж малювати порожню сторінку з помилками.
-  if (!can('admin')) {
-    app.innerHTML = `<div class="card">
-      <h1>Налаштування</h1>
-      <p class="muted">Розділ доступний лише адміністратору. Ви увійшли як
-        <b>${esc(ME.user?.name || ME.user?.login || '')}</b> (${esc(ME.user?.role === 'worker' ? 'комірник' : 'перегляд')}).</p>
-      <a href="#/scan"><button class="primary">До сканування</button></a>
-    </div>`;
-    return;
-  }
   const tab = seg[1] || 'appearance';
   const st = await api('/settings');
   applySettings(st);
@@ -229,19 +217,19 @@ function renderAppearance(box, st) {
 }
 
 async function renderUsers(box) {
-  const { users, roles } = await api('/users');
-  const roleName = (k) => roles.find((r) => r.key === k)?.label || k;
+  const { users } = await api('/users');
 
   box.innerHTML = `
     <div class="row"><h2 class="grow">Користувачі</h2>
       <button class="primary sm" id="addUser"><span class="bi">＋</span>Додати</button></div>
+    <p class="muted small">Кожен користувач має свій логін і пароль, а в історії рухів видно,
+      хто саме зробив операцію. Доступ у всіх однаковий.</p>
 
     ${users.length ? `<div class="table-wrap"><table>
-      <thead><tr><th>Логін</th><th>Ім'я</th><th>Роль</th><th>Стан</th><th>Останній вхід</th><th></th></tr></thead>
+      <thead><tr><th>Логін</th><th>Ім'я</th><th>Стан</th><th>Останній вхід</th><th></th></tr></thead>
       <tbody>${users.map((u) => `<tr>
         <td class="mono">${esc(u.login)}</td>
         <td>${esc(u.name || '')}</td>
-        <td>${esc(roleName(u.role))}</td>
         <td>${u.active ? '<span class="badge ok">активний</span>' : '<span class="badge err">вимкнений</span>'}</td>
         <td class="small muted">${esc(u.last_login || '—')}</td>
         <td class="nowrap">
@@ -251,21 +239,11 @@ async function renderUsers(box) {
       </tr>`).join('')}</tbody></table></div>`
       : `<div class="hint">Користувачів ще немає, вхід іде спільним паролем.
           Щойно ви додасте першого користувача, вхід почне вимагати логін —
-          тому першим створіть саме себе з роллю «Адміністратор».</div>`}
+          тому першим створіть саме себе.</div>`}`;
 
-    <h3 style="margin-top:16px">Що можуть ролі</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Роль</th><th>Права</th></tr></thead>
-      <tbody>
-        <tr><td><b>Адміністратор</b></td><td class="small">Усе, включно з налаштуваннями, складами, категоріями й користувачами.</td></tr>
-        <tr><td><b>Комірник</b></td><td class="small">Прихід, видача, переміщення, інвентаризація, створення та редагування товарів. Не змінює склади, категорії й налаштування.</td></tr>
-        <tr><td><b>Перегляд</b></td><td class="small">Тільки дивиться: пошук, залишки, де що лежить. Нічого не змінює.</td></tr>
-      </tbody>
-    </table></div>`;
-
-  box.querySelector('#addUser').addEventListener('click', () => dlgUser(null, roles));
+  box.querySelector('#addUser').addEventListener('click', () => dlgUser(null));
   box.querySelectorAll('[data-edituser]').forEach((b) => b.addEventListener('click', () =>
-    dlgUser(users.find((u) => u.id === Number(b.dataset.edituser)), roles)));
+    dlgUser(users.find((u) => u.id === Number(b.dataset.edituser)))));
   box.querySelectorAll('[data-deluser]').forEach((b) => b.addEventListener('click', async () => {
     if (!confirm('Видалити користувача? Його записи в історії залишаться — там зберігається ім\'я текстом.')) return;
     try { await api(`/users/${b.dataset.deluser}`, { method: 'DELETE' }); route(); }
@@ -273,15 +251,13 @@ async function renderUsers(box) {
   }));
 }
 
-function dlgUser(u, roles) {
+function dlgUser(u) {
   const bg = modal(`
     <h2>${u ? 'Змінити користувача' : 'Новий користувач'}</h2>
     <form id="f">
       ${u ? `<p class="small muted">Логін: <b class="mono">${esc(u.login)}</b></p>`
           : '<label class="field"><span>Логін *</span><input id="login" autocapitalize="off" placeholder="petro" required></label>'}
       <label class="field"><span>Ім'я</span><input id="name" value="${esc(u?.name || '')}" placeholder="Петро"></label>
-      <label class="field"><span>Роль</span>
-        <select id="role">${roles.map((r) => `<option value="${r.key}" ${u?.role === r.key ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}</select></label>
       <label class="field"><span>${u ? 'Новий пароль (лишіть порожнім, щоб не міняти)' : 'Пароль *'}</span>
         <input type="password" id="password" ${u ? '' : 'required minlength="6"'}></label>
       ${u ? `<label class="field"><span>Стан</span>
@@ -297,7 +273,6 @@ function dlgUser(u, roles) {
     e.preventDefault();
     const body = {
       name: bg.querySelector('#name').value,
-      role: bg.querySelector('#role').value,
       password: bg.querySelector('#password').value || undefined,
     };
     try {
@@ -414,23 +389,13 @@ function renderLogin() {
       await api('/login', { method: 'POST', body });
       ME = await api('/me');
       $('#sidebar').hidden = false;
-      applyRoleToMenu();
       location.hash = '#/scan';
       route();
     } catch (err) { toast(err.message, 'err'); }
   });
 }
 
-// Ховаємо від комірника те, чого йому все одно не дозволить сервер.
-function applyRoleToMenu() {
-  const settingsLink = document.querySelector('.side nav a[href="#/settings"]');
-  if (settingsLink) settingsLink.hidden = !can('admin');
-  const who = $('#whoami');
-  if (who && ME.user) {
-    who.textContent = ME.user.name || ME.user.login || '';
-    who.hidden = !ME.user.name && !ME.user.login;
-  }
-}
+
 
 /* ============================================================ сканування */
 
@@ -2362,7 +2327,6 @@ $('#logoutBtn').addEventListener('click', async () => {
   ME = await api('/me');
   if (!ME.authed) return renderLogin();
   $('#sidebar').hidden = false;
-  applyRoleToMenu();
   if (!location.hash) location.hash = '#/scan';
   route();
 })();
