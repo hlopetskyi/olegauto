@@ -1,3 +1,29 @@
+/* Світла тема. Перемикається атрибутом на <html>, змінні ті самі. */
+:root[data-theme="light"] {
+  --bg: #f4f6f9;
+  --panel: #ffffff;
+  --panel-2: #eef1f6;
+  --line: #d6dce6;
+  --text: #16202c;
+  --muted: #5d6b7f;
+  --ok: #1f8b3a;
+  --warn: #a06a00;
+  --err: #c0392b;
+}
+:root[data-theme="light"] button:hover { background: #e2e7ef; }
+:root[data-theme="light"] .cell.filled { background: #e4f6e9; border-color: #9ed4b0; }
+:root[data-theme="light"] .plan { background-color: #e9edf3; }
+:root[data-theme="light"] .rack-block { background: rgba(255,255,255,.75); border-color: #b9c6d8; }
+:root[data-theme="light"] .rack-block .rb-cell { background: #e6ebf3; border-color: #c3cddc; }
+:root[data-theme="light"] .rack-block .rb-cell.full { background: #cdeed8; border-color: #7fc396; color: #10401f; }
+:root[data-theme="light"] .rack-block .rb-cell.full .rb-qty { color: #10401f; }
+:root[data-theme="light"] .cell-tip { background: #ffffff; }
+:root[data-theme="light"] .slot-empty { border-color: #c3cddc; color: #97a5b8; }
+:root[data-theme="light"] .zone-block { background: #efeaf7; border-color: #b9a8d8; }
+:root[data-theme="light"] .badge.ok { background: #dff3e4; color: #1f7a37; }
+:root[data-theme="light"] .badge.warn { background: #fdf0d5; color: #8a5b00; }
+:root[data-theme="light"] .badge.err { background: #fbe3e1; color: #b3271b; }
+
 :root {
   --bg: #0f1720;
   --panel: #172231;
@@ -358,3 +384,23 @@ tbody tr:hover { background: var(--panel-2); }
 .plan-ghost.busy {
   border-color: var(--err); background: rgba(248,81,73,.16); color: var(--err);
 }
+
+
+/* --------------------------------------------------------- налаштування */
+
+.subnav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.subnav a {
+  padding: 8px 14px; border-radius: var(--radius);
+  background: var(--panel-2); color: var(--muted); font-weight: 600; font-size: 14px;
+}
+.subnav a.active { background: var(--accent); color: #10161f; }
+
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatch {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer; padding: 0;
+}
+.swatch.active { border-color: var(--text); box-shadow: 0 0 0 2px var(--panel); }
+
+.theme-pick { display: flex; gap: 8px; flex-wrap: wrap; }
+.theme-pick button.active { background: var(--accent); color: #10161f; border-color: transparent; }

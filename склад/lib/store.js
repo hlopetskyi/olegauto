@@ -747,6 +747,80 @@ function findByExternal(integrationId, { external_id, sku }) {
   return null;
 }
 
+/* ---------------------------------------------------------- налаштування */
+
+const crypto2 = require('crypto');
+
+// Налаштування живуть у meta під префіксом set:, тож окрема таблиця не потрібна.
+const SETTINGS_DEFAULTS = {
+  brand: 'Inventa',
+  theme: 'dark',          // dark | light | auto
+  accent: '#ffb020',
+  plan_cell: 34,          // розмір клітинки плану складу, px
+  session_days: 30,
+};
+
+function getSettings() {
+  const rows = db.prepare("SELECT key, value FROM meta WHERE key LIKE 'set:%'").all();
+  const stored = Object.fromEntries(rows.map((r) => [r.key.slice(4), r.value]));
+  const out = { ...SETTINGS_DEFAULTS };
+  Object.entries(stored).forEach(([k, v]) => {
+    if (!(k in SETTINGS_DEFAULTS)) return;
+    out[k] = typeof SETTINGS_DEFAULTS[k] === 'number' ? Number(v) : v;
+  });
+  return out;
+}
+
+const saveSettings = db.transaction((patch) => {
+  const ins = db.prepare("INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+  Object.entries(patch || {}).forEach(([k, v]) => {
+    if (!(k in SETTINGS_DEFAULTS) || v === undefined || v === null) return;
+    ins.run('set:' + k, String(v));
+  });
+  return getSettings();
+});
+
+/* ------------------------------------------------------------- безпека */
+
+// scrypt із випадковою сіллю. Пароль у відкритому вигляді ніде не зберігається.
+function hashPassword(plain) {
+  const salt = crypto2.randomBytes(16).toString('hex');
+  const hash = crypto2.scryptSync(String(plain), salt, 64).toString('hex');
+  return `scrypt:${salt}:${hash}`;
+}
+
+function verifyPassword(plain, stored) {
+  const [algo, salt, hash] = String(stored || '').split(':');
+  if (algo !== 'scrypt' || !salt || !hash) return false;
+  const candidate = crypto2.scryptSync(String(plain), salt, 64);
+  const known = Buffer.from(hash, 'hex');
+  return candidate.length === known.length && crypto2.timingSafeEqual(candidate, known);
+}
+
+const getPasswordHash = () => db.prepare("SELECT value FROM meta WHERE key = 'auth:password'").get()?.value || null;
+
+const setPassword = (plain) => {
+  db.prepare("INSERT INTO meta(key, value) VALUES('auth:password', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .run(hashPassword(plain));
+  return { ok: true };
+};
+
+// Додаткова сіль підпису сесій. Її зміна миттєво розлогінює всі пристрої.
+function sessionSalt() {
+  const row = db.prepare("SELECT value FROM meta WHERE key = 'auth:session_salt'").get();
+  if (row) return row.value;
+  const salt = crypto2.randomBytes(16).toString('hex');
+  db.prepare("INSERT INTO meta(key, value) VALUES('auth:session_salt', ?)").run(salt);
+  return salt;
+}
+
+const rotateSessionSalt = () => {
+  const salt = crypto2.randomBytes(16).toString('hex');
+  db.prepare("INSERT INTO meta(key, value) VALUES('auth:session_salt', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .run(salt);
+  return { ok: true };
+};
+
 /* ------------------------------------------------------------------ дашборд */
 
 function dashboard() {
@@ -776,6 +850,8 @@ module.exports = {
   listPresets, applyPreset, productValues,
   stockIn, stockOut, stockMove, stockAdjust, getQty, totalQty, listMovements,
   resolveCode,
+  getSettings, saveSettings,
+  hashPassword, verifyPassword, getPasswordHash, setPassword, sessionSalt, rotateSessionSalt,
   listIntegrations, createIntegration, updateIntegration, rotateIntegrationKey, deleteIntegration,
   integrationByKey, linkProduct, unlinkProduct, findByExternal,
   dashboard,

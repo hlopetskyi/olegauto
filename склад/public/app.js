@@ -73,13 +73,172 @@ const renderAllBarcodes = (root = document) =>
     fontSize: Number(el.dataset.fs) || 12,
   }));
 
+/* ====================================================== налаштування */
+
+let SETTINGS = null;
+
+// Тема, акцент і назва — єдине місце, де вони застосовуються до сторінки.
+function applySettings(st) {
+  SETTINGS = { ...(SETTINGS || {}), ...st };
+  const root = document.documentElement;
+  const theme = SETTINGS.theme === 'auto'
+    ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    : SETTINGS.theme;
+  root.dataset.theme = theme || 'dark';
+  if (SETTINGS.accent) root.style.setProperty('--accent', SETTINGS.accent);
+  if (SETTINGS.plan_cell) PLAN_CELL = Number(SETTINGS.plan_cell);
+  const logo = $('header.top .logo');
+  if (logo && SETTINGS.brand) logo.textContent = SETTINGS.brand;
+  document.title = `${SETTINGS.brand || 'Inventa'} — складський облік`;
+}
+
+const ACCENTS = ['#ffb020', '#2f81f7', '#2ea043', '#e05561', '#a06bf0', '#00b8a9'];
+
+async function viewSettings(seg) {
+  const tab = seg[1] || 'appearance';
+  const st = await api('/settings');
+  applySettings(st);
+
+  app.innerHTML = `
+    <div class="card">
+      <h1>Налаштування</h1>
+      <div class="subnav">
+        <a href="#/settings/appearance" class="${tab === 'appearance' ? 'active' : ''}">Вигляд</a>
+        <a href="#/settings/security" class="${tab === 'security' ? 'active' : ''}">Безпека</a>
+      </div>
+      <div id="settingsBody"></div>
+    </div>`;
+
+  if (tab === 'security') return renderSecurity($('#settingsBody'));
+  renderAppearance($('#settingsBody'), st);
+}
+
+function renderAppearance(box, st) {
+  box.innerHTML = `
+    <h2>Вигляд</h2>
+    <label class="field"><span>Назва у шапці</span>
+      <input id="brand" value="${esc(st.brand)}" maxlength="24" placeholder="Inventa"></label>
+
+    <label class="field"><span>Тема</span></label>
+    <div class="theme-pick" id="themePick">
+      ${[['dark', '🌙 Темна'], ['light', '☀️ Світла'], ['auto', '🖥 Як у системі']]
+        .map(([k, n]) => `<button type="button" data-theme="${k}" class="${st.theme === k ? 'active' : ''}">${n}</button>`).join('')}
+    </div>
+
+    <label class="field" style="margin-top:14px"><span>Акцентний колір</span></label>
+    <div class="swatches" id="swatches">
+      ${ACCENTS.map((c) => `<button type="button" class="swatch ${st.accent === c ? 'active' : ''}"
+          data-accent="${c}" style="background:${c}" title="${c}"></button>`).join('')}
+    </div>
+
+    <label class="field" style="margin-top:14px">
+      <span>Розмір клітинки на плані складу — <b id="cellVal">${st.plan_cell}</b> px</span>
+      <input type="range" id="plan_cell" min="24" max="56" step="2" value="${st.plan_cell}"></label>
+    <p class="small muted">Більша клітинка — краще видно комірки, але план ширший.</p>
+
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="saveAppearance">Зберегти</button>
+      <button class="ghost" id="resetAppearance">Скинути до типових</button>
+    </div>`;
+
+  // Тему й колір показуємо одразу, ще до збереження — щоб було видно, що вибираєш.
+  const draft = { ...st };
+  box.querySelectorAll('#themePick button').forEach((b) => b.addEventListener('click', () => {
+    draft.theme = b.dataset.theme;
+    box.querySelectorAll('#themePick button').forEach((x) => x.classList.toggle('active', x === b));
+    applySettings({ theme: draft.theme });
+  }));
+  box.querySelectorAll('.swatch').forEach((b) => b.addEventListener('click', () => {
+    draft.accent = b.dataset.accent;
+    box.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('active', x === b));
+    applySettings({ accent: draft.accent });
+  }));
+  box.querySelector('#plan_cell').addEventListener('input', (e) => {
+    draft.plan_cell = Number(e.target.value);
+    box.querySelector('#cellVal').textContent = draft.plan_cell;
+  });
+
+  box.querySelector('#saveAppearance').addEventListener('click', async () => {
+    const saved = await api('/settings', { method: 'PUT', body: {
+      brand: box.querySelector('#brand').value.trim() || 'Inventa',
+      theme: draft.theme, accent: draft.accent, plan_cell: draft.plan_cell,
+    } });
+    applySettings(saved);
+    toast('Збережено', 'ok');
+  });
+
+  box.querySelector('#resetAppearance').addEventListener('click', async () => {
+    const saved = await api('/settings', { method: 'PUT', body: {
+      brand: 'Inventa', theme: 'dark', accent: '#ffb020', plan_cell: 34,
+    } });
+    applySettings(saved);
+    route();
+  });
+}
+
+async function renderSecurity(box) {
+  const sec = await api('/security');
+  box.innerHTML = `
+    <h2>Безпека</h2>
+
+    ${sec.default_password ? `<div class="hint" style="border-color:#7a4a12;background:rgba(255,176,32,.12);color:#ffd08a">
+      Зараз діє пароль за замовчуванням. Змініть його нижче, перш ніж відкривати доступ до додатка з інтернету.
+    </div>` : ''}
+
+    <p class="small muted">Пароль ${sec.password_source === 'app'
+      ? 'заданий у самому додатку і зберігається у вигляді хешу — у відкритому вигляді його немає ніде.'
+      : 'зараз береться зі змінної оточення. Щойно зміните його тут, джерелом стане додаток.'}</p>
+
+    <form id="pwForm" style="max-width:420px">
+      <h3>Зміна пароля</h3>
+      <label class="field"><span>Поточний пароль</span><input type="password" id="current" required></label>
+      <label class="field"><span>Новий пароль</span><input type="password" id="next" minlength="6" required></label>
+      <label class="field"><span>Новий пароль ще раз</span><input type="password" id="next2" minlength="6" required></label>
+      <button class="primary">Змінити пароль</button>
+      <p class="small muted">Після зміни всі інші пристрої, де ви входили, доведеться авторизувати заново.</p>
+    </form>
+
+    <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+
+    <h3>Сесії</h3>
+    <div class="row" style="max-width:420px">
+      <label class="field grow"><span>Скільки днів пам'ятати вхід</span>
+        <input type="number" id="session_days" min="1" max="365" value="${sec.session_days}"></label>
+      <button class="sm" id="saveSession" style="margin-bottom:10px">Зберегти</button>
+    </div>
+    <button class="danger" id="logoutAll">Вийти на всіх пристроях</button>
+    <p class="small muted">Розлогінює всі сесії, крім поточної.</p>`;
+
+  box.querySelector('#pwForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const next = box.querySelector('#next').value;
+    if (next !== box.querySelector('#next2').value) return toast('Нові паролі не збігаються', 'err');
+    try {
+      await api('/security/password', { method: 'POST', body: { current: box.querySelector('#current').value, next } });
+      toast('Пароль змінено', 'ok');
+      route();
+    } catch (err) { toast(err.message, 'err'); }
+  });
+
+  box.querySelector('#saveSession').addEventListener('click', async () => {
+    await api('/settings', { method: 'PUT', body: { session_days: Number(box.querySelector('#session_days').value) } });
+    toast('Збережено', 'ok');
+  });
+
+  box.querySelector('#logoutAll').addEventListener('click', async () => {
+    if (!confirm('Вийти на всіх інших пристроях?')) return;
+    await api('/security/logout-all', { method: 'POST' });
+    toast('Інші сесії завершено', 'ok');
+  });
+}
+
 /* ============================================================ вхід */
 
 function renderLogin() {
   $('#topbar').hidden = true;
   app.innerHTML = `
     <div class="card" style="max-width:380px;margin:12vh auto">
-      <h1>Inventa</h1>
+      <h1>${esc(SETTINGS?.brand || 'Inventa')}</h1>
       <p class="muted small">Складський облік зі штрих-кодами.</p>
       <p class="muted small">Введіть пароль доступу.</p>
       <form id="loginForm">
@@ -1141,7 +1300,7 @@ function startPlacing(rackId) {
   $('#planHint').textContent = 'Тепер натисніть на плані місце, куди поставити стелаж.';
 }
 
-const PLAN_CELL = 34;
+let PLAN_CELL = 34;
 
 // Куди саме на сітці вказує курсор. Рахуємо математикою, а не пошуком елемента
 // під курсором: підкладку сітки перекривають самі блоки стелажів.
@@ -1777,6 +1936,7 @@ async function route() {
       case 'labels': return viewLabels(params);
       case 'history': return viewHistory(params);
       case 'integrations': return viewIntegrations();
+      case 'settings': return viewSettings(seg);
       default: location.hash = '#/scan';
     }
   } catch (e) {
@@ -1792,6 +1952,8 @@ $('#logoutBtn').addEventListener('click', async () => {
 });
 
 (async function boot() {
+  // Тему й назву тягнемо ще до перевірки входу, щоб екран логіна вже був у вашому вигляді.
+  try { applySettings(await api('/public-settings')); } catch (e) { /* лишиться типовий вигляд */ }
   const { authed } = await api('/me');
   if (!authed) return renderLogin();
   $('#topbar').hidden = false;

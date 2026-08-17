@@ -20,24 +20,42 @@ app.use(cookieParser());
 
 /* ------------------------------------------------------------------ auth */
 
-const sign = (v) => crypto.createHmac('sha256', SESSION_SECRET).update(v).digest('hex');
+// У підпис входить сіль із бази: змінили її — і всі сесії стали недійсні.
+const sign = (v) => crypto.createHmac('sha256', SESSION_SECRET + S.sessionSalt()).update(v).digest('hex');
 const makeToken = () => {
   const payload = String(Date.now());
   return `${payload}.${sign(payload)}`;
 };
+const sessionMs = () => (S.getSettings().session_days || 30) * 24 * 3600 * 1000;
 const validToken = (t) => {
   if (!t || !t.includes('.')) return false;
   const [payload, sig] = t.split('.');
   if (sign(payload) !== sig) return false;
-  return Date.now() - Number(payload) < 30 * 24 * 3600 * 1000; // 30 днів
+  return Date.now() - Number(payload) < sessionMs();
 };
 
+// Пароль зі змінної оточення — лише поки його не змінили в самому додатку.
+// Після зміни джерелом правди стає хеш у базі.
+function passwordOk(plain) {
+  const stored = S.getPasswordHash();
+  if (stored) return S.verifyPassword(plain, stored);
+  return typeof plain === 'string' && plain === PASSWORD;
+}
+
+const usingDefaultPassword = () => !S.getPasswordHash() && PASSWORD === 'inventa';
+
 app.post('/api/login', (req, res) => {
-  if (req.body?.password !== PASSWORD) return res.status(401).json({ error: 'Невірний пароль' });
+  if (!passwordOk(req.body?.password)) return res.status(401).json({ error: 'Невірний пароль' });
   res.cookie('inventa_session', makeToken(), {
-    httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 3600 * 1000,
+    httpOnly: true, sameSite: 'lax', maxAge: sessionMs(),
   });
   res.json({ ok: true });
+});
+
+// Те, що потрібно ще до входу: як називати додаток і в якій темі малювати екран.
+app.get('/api/public-settings', (req, res) => {
+  const { brand, theme, accent } = S.getSettings();
+  res.json({ brand, theme, accent });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -73,6 +91,40 @@ const wrap = (fn) => (req, res) => {
 const id = (req, key = 'id') => Number(req.params[key]);
 
 api.get('/dashboard', wrap(() => S.dashboard()));
+
+// налаштування вигляду
+api.get('/settings', wrap(() => S.getSettings()));
+api.put('/settings', wrap((req) => S.saveSettings(req.body)));
+
+// безпека
+api.get('/security', wrap(() => ({
+  password_source: S.getPasswordHash() ? 'app' : 'env',
+  default_password: usingDefaultPassword(),
+  session_days: S.getSettings().session_days,
+})));
+
+api.post('/security/password', wrap((req, res) => {
+  const { current, next } = req.body || {};
+  if (!passwordOk(current)) {
+    res.status(400).json({ error: 'Поточний пароль невірний' });
+    return undefined;
+  }
+  if (!next || String(next).length < 6) {
+    res.status(400).json({ error: 'Новий пароль має бути щонайменше 6 символів' });
+    return undefined;
+  }
+  S.setPassword(next);
+  // Міняємо сіль: старі сесії на інших пристроях мають перестати діяти.
+  S.rotateSessionSalt();
+  res.cookie('inventa_session', makeToken(), { httpOnly: true, sameSite: 'lax', maxAge: sessionMs() });
+  return { ok: true };
+}));
+
+api.post('/security/logout-all', wrap((req, res) => {
+  S.rotateSessionSalt();
+  res.cookie('inventa_session', makeToken(), { httpOnly: true, sameSite: 'lax', maxAge: sessionMs() });
+  return { ok: true };
+}));
 
 // склади
 api.get('/warehouses', wrap(() => S.listWarehouses()));
@@ -172,5 +224,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {
   console.log(`Inventa запущена: http://localhost:${PORT}`);
-  if (PASSWORD === 'inventa') console.log('УВАГА: стоїть пароль за замовчуванням. Задайте INVENTA_PASSWORD.');
+  if (usingDefaultPassword()) {
+    console.log('УВАГА: стоїть пароль за замовчуванням. Змініть його в «Налаштування → Безпека» або задайте INVENTA_PASSWORD.');
+  }
 });
