@@ -146,6 +146,39 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE INDEX IF NOT EXISTS idx_products_code ON products(code);
 CREATE INDEX IF NOT EXISTS idx_products_oem  ON products(oem);
 
+-- Заводські штрих-коди з упаковки. Свій код у товару один (у полі barcode),
+-- а чужих може бути скільки завгодно: EAN виробника, код постачальника тощо.
+CREATE TABLE IF NOT EXISTS product_barcodes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  code       TEXT NOT NULL UNIQUE,
+  note       TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pbarcodes_product ON product_barcodes(product_id);
+
+-- Фото товару лежать файлами в data/uploads, у базі — лише імена.
+CREATE TABLE IF NOT EXISTS product_photos (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  file       TEXT NOT NULL,
+  sort       INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_photos_product ON product_photos(product_id);
+
+-- role: admin (усе) | worker (рух товару й товари) | viewer (тільки перегляд)
+CREATE TABLE IF NOT EXISTS users (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  login         TEXT NOT NULL UNIQUE,
+  name          TEXT DEFAULT '',
+  password_hash TEXT NOT NULL,
+  role          TEXT NOT NULL DEFAULT 'worker',
+  active        INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  last_login    TEXT
+);
+
 CREATE TABLE IF NOT EXISTS stock (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -226,6 +259,9 @@ addColumn('racks', 'color', "TEXT DEFAULT ''");
 // Розмір «підлоги» складу в клітинках плану.
 addColumn('warehouses', 'plan_w', 'INTEGER DEFAULT 24');
 addColumn('warehouses', 'plan_h', 'INTEGER DEFAULT 14');
+// Хто зробив рух товару. Стара база рухів такої колонки не мала.
+addColumn('movements', 'user_id', 'INTEGER REFERENCES users(id)');
+addColumn('movements', 'user_name', "TEXT DEFAULT ''");
 // Категорія товару — для баз, що існували до появи категорій.
 // Індекс ставимо тут, а не в CREATE-блоці: на старій базі колонки ще не було.
 addColumn('products', 'category_id', 'INTEGER REFERENCES categories(id)');
@@ -298,4 +334,4 @@ function newLocationBarcode() {
   return 'L' + String(nextSeq('seq_loc')).padStart(6, '0');
 }
 
-module.exports = { db, newProductBarcode, newLocationBarcode };
+module.exports = { db, DATA_DIR, newProductBarcode, newLocationBarcode };

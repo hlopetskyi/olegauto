@@ -517,6 +517,7 @@ function productFull(id) {
   `).all(id);
   const fields = effectiveFields(product.category_id);
   const values = productValues(id);
+  const photos = productPhotos(id);
   return {
     ...product,
     total_qty: placements.reduce((s, p) => s + p.qty, 0),
@@ -524,6 +525,8 @@ function productFull(id) {
     links,
     fields,
     values,
+    photos,
+    extra_barcodes: productBarcodes(id).map((b) => b.code),
     // Готовий до показу список «підпис → значення», без порожніх.
     attributes: fields
       .map((f) => ({ label: f.label, type: f.type, value: values[f.id] ?? '' }))
@@ -564,8 +567,9 @@ function searchProducts({ q = '', limit = 100, offset = 0, lowStock = false, cat
   if (q.trim()) {
     // Пошук іде і по власних полях категорії — інакше не знайти за OEM чи серійним номером.
     where.push(`(p.name LIKE ? OR p.code LIKE ? OR p.barcode LIKE ?
-                 OR EXISTS (SELECT 1 FROM product_values v WHERE v.product_id = p.id AND v.value LIKE ?))`);
-    args.push(like, like, like, like);
+                 OR EXISTS (SELECT 1 FROM product_values v WHERE v.product_id = p.id AND v.value LIKE ?)
+                 OR EXISTS (SELECT 1 FROM product_barcodes b WHERE b.product_id = p.id AND b.code LIKE ?))`);
+    args.push(like, like, like, like, like);
   }
   if (uncategorized) {
     where.push('p.category_id IS NULL');
@@ -578,6 +582,7 @@ function searchProducts({ q = '', limit = 100, offset = 0, lowStock = false, cat
   let sql = `
     SELECT * FROM (
       SELECT p.*, c.name AS category_name, c.color AS category_color,
+             (SELECT ph.file FROM product_photos ph WHERE ph.product_id = p.id ORDER BY ph.sort, ph.id LIMIT 1) AS photo,
              COALESCE((SELECT SUM(s.qty) FROM stock s WHERE s.product_id = p.id), 0) AS total_qty
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
@@ -608,9 +613,16 @@ const setQty = (productId, locId, qty) => {
   }
 };
 
+// Хто саме зробив рух. Ім'я дублюємо текстом, щоб історія лишалась читабельною
+// навіть після видалення користувача.
+let currentActor = null;
+const setActor = (actor) => { currentActor = actor || null; };
+
 const logMove = (type, productId, fromLoc, toLoc, qty, note) =>
-  db.prepare('INSERT INTO movements(type, product_id, from_loc_id, to_loc_id, qty, note) VALUES(?, ?, ?, ?, ?, ?)')
-    .run(type, productId, fromLoc, toLoc, qty, note || '');
+  db.prepare(`INSERT INTO movements(type, product_id, from_loc_id, to_loc_id, qty, note, user_id, user_name)
+              VALUES(?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(type, productId, fromLoc, toLoc, qty, note || '',
+         currentActor?.id ?? null, currentActor?.name || currentActor?.login || '');
 
 // Прихід: поклали qty штук деталі у місце.
 const stockIn = db.transaction((productId, locId, qty, note) => {
@@ -679,6 +691,10 @@ function resolveCode(raw) {
   const byBarcode = db.prepare('SELECT id FROM products WHERE barcode = ?').get(code);
   if (byBarcode) return { type: 'product', product: productFull(byBarcode.id) };
 
+  // Заводський код з упаковки — його клієнт сканує найчастіше.
+  const byExtra = db.prepare('SELECT product_id AS id FROM product_barcodes WHERE code = ?').get(code);
+  if (byExtra) return { type: 'product', product: productFull(byExtra.id) };
+
   const exact = db.prepare('SELECT id FROM products WHERE code = ? OR oem = ? LIMIT 2').all(code, code);
   if (exact.length === 1) return { type: 'product', product: productFull(exact[0].id) };
 
@@ -746,6 +762,118 @@ function findByExternal(integrationId, { external_id, sku }) {
   }
   return null;
 }
+
+/* ------------------------------------------- додаткові штрих-коди товару */
+
+const productBarcodes = (productId) =>
+  db.prepare('SELECT * FROM product_barcodes WHERE product_id = ? ORDER BY id').all(productId);
+
+// Повна заміна списку заводських кодів товару. Чужий код не можна забрати
+// в іншого товару мовчки — сканер тоді знаходив би не те.
+const setProductBarcodes = db.transaction((productId, codes) => {
+  const clean = [...new Set((codes || []).map((c) => String(c).trim()).filter(Boolean))];
+  clean.forEach((code) => {
+    const owner = db.prepare('SELECT product_id FROM product_barcodes WHERE code = ?').get(code);
+    if (owner && owner.product_id !== Number(productId)) {
+      const p = db.prepare('SELECT name FROM products WHERE id = ?').get(owner.product_id);
+      throw new Error(`Код ${code} вже стоїть на товарі «${p?.name || owner.product_id}»`);
+    }
+    if (db.prepare('SELECT 1 FROM products WHERE barcode = ?').get(code)) {
+      throw new Error(`Код ${code} збігається з внутрішнім кодом іншого товару`);
+    }
+  });
+  db.prepare('DELETE FROM product_barcodes WHERE product_id = ?').run(productId);
+  const ins = db.prepare('INSERT INTO product_barcodes(product_id, code) VALUES(?, ?)');
+  clean.forEach((code) => ins.run(productId, code));
+  return productBarcodes(productId);
+});
+
+/* ------------------------------------------------------------ фото товару */
+
+const productPhotos = (productId) =>
+  db.prepare('SELECT * FROM product_photos WHERE product_id = ? ORDER BY sort, id').all(productId);
+
+const addPhoto = (productId, file) => {
+  const sort = db.prepare('SELECT COALESCE(MAX(sort), -1) + 1 AS s FROM product_photos WHERE product_id = ?').get(productId).s;
+  const info = db.prepare('INSERT INTO product_photos(product_id, file, sort) VALUES(?, ?, ?)').run(productId, file, sort);
+  return db.prepare('SELECT * FROM product_photos WHERE id = ?').get(info.lastInsertRowid);
+};
+
+const getPhoto = (id) => db.prepare('SELECT * FROM product_photos WHERE id = ?').get(id);
+const deletePhoto = (id) => db.prepare('DELETE FROM product_photos WHERE id = ?').run(id);
+
+// Головне фото — те, що стоїть першим; його показуємо у списках.
+const makeMainPhoto = db.transaction((id) => {
+  const ph = getPhoto(id);
+  if (!ph) return null;
+  db.prepare('UPDATE product_photos SET sort = sort + 1 WHERE product_id = ?').run(ph.product_id);
+  db.prepare('UPDATE product_photos SET sort = 0 WHERE id = ?').run(id);
+  return productPhotos(ph.product_id);
+});
+
+/* -------------------------------------------------------------- користувачі */
+
+const listUsers = () =>
+  db.prepare('SELECT id, login, name, role, active, created_at, last_login FROM users ORDER BY login').all();
+
+const userByLogin = (login) =>
+  db.prepare('SELECT * FROM users WHERE login = ? AND active = 1').get(String(login || '').trim().toLowerCase());
+
+const userById = (id) =>
+  db.prepare('SELECT id, login, name, role, active FROM users WHERE id = ?').get(id);
+
+const usersCount = () => db.prepare('SELECT COUNT(*) AS n FROM users WHERE active = 1').get().n;
+
+const createUser = ({ login, name = '', password, role = 'worker' }) => {
+  const l = String(login || '').trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,}$/.test(l)) throw new Error('Логін: щонайменше 3 символи, латиниця, цифри, крапка, дефіс');
+  if (!password || String(password).length < 6) throw new Error('Пароль має бути щонайменше 6 символів');
+  if (db.prepare('SELECT 1 FROM users WHERE login = ?').get(l)) throw new Error('Такий логін уже є');
+  const info = db.prepare('INSERT INTO users(login, name, password_hash, role) VALUES(?, ?, ?, ?)')
+    .run(l, name, hashPassword(password), ROLES[role] ? role : 'worker');
+  return userById(info.lastInsertRowid);
+};
+
+const updateUser = (id, { name, role, active, password }) => {
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!u) throw new Error('Користувача не знайдено');
+  // Останнього активного адміністратора не можна ні розжалувати, ні вимкнути —
+  // інакше в додаток більше ніхто не зайде.
+  const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1").get().n;
+  const losingAdmin = u.role === 'admin' && u.active && ((role && role !== 'admin') || active === 0 || active === false);
+  if (losingAdmin && admins <= 1) throw new Error('Це останній адміністратор — залиште хоча б одного');
+  db.prepare('UPDATE users SET name = ?, role = ?, active = ? WHERE id = ?')
+    .run(name ?? u.name, ROLES[role] ? role : u.role, active === undefined ? u.active : (active ? 1 : 0), id);
+  if (password) {
+    if (String(password).length < 6) throw new Error('Пароль має бути щонайменше 6 символів');
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), id);
+  }
+  return userById(id);
+};
+
+const deleteUser = (id) => {
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!u) return { ok: true };
+  const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1").get().n;
+  if (u.role === 'admin' && u.active && admins <= 1) throw new Error('Це останній адміністратор — його не можна видалити');
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  return { ok: true };
+};
+
+const touchLogin = (id) => db.prepare("UPDATE users SET last_login = datetime('now','localtime') WHERE id = ?").run(id);
+
+// Права ролей. Перевірка одна на весь додаток, щоб не розповзалась по роутах.
+const ROLES = {
+  admin: { label: 'Адміністратор', can: () => true },
+  worker: {
+    label: 'Комірник',
+    can: (action) => ['read', 'stock', 'product_edit'].includes(action),
+  },
+  viewer: { label: 'Перегляд', can: (action) => action === 'read' },
+};
+
+const roleCan = (role, action) => !!(ROLES[role] || ROLES.viewer).can(action);
+const listRoles = () => Object.entries(ROLES).map(([key, v]) => ({ key, label: v.label }));
 
 /* ---------------------------------------------------------- налаштування */
 
@@ -851,6 +979,10 @@ module.exports = {
   stockIn, stockOut, stockMove, stockAdjust, getQty, totalQty, listMovements,
   resolveCode,
   getSettings, saveSettings,
+  productBarcodes, setProductBarcodes,
+  productPhotos, addPhoto, getPhoto, deletePhoto, makeMainPhoto,
+  listUsers, userByLogin, userById, usersCount, createUser, updateUser, deleteUser, touchLogin,
+  roleCan, listRoles, setActor,
   hashPassword, verifyPassword, getPasswordHash, setPassword, sessionSalt, rotateSessionSalt,
   listIntegrations, createIntegration, updateIntegration, rotateIntegrationKey, deleteIntegration,
   integrationByKey, linkProduct, unlinkProduct, findByExternal,

@@ -76,6 +76,8 @@ const renderAllBarcodes = (root = document) =>
 /* ====================================================== налаштування */
 
 let SETTINGS = null;
+let ME = { authed: false, user: null, can: { admin: false, stock: false, product_edit: false } };
+const can = (what) => !!ME.can?.[what];
 
 // Тема, акцент і назва — єдине місце, де вони застосовуються до сторінки.
 function applySettings(st) {
@@ -95,6 +97,17 @@ function applySettings(st) {
 const ACCENTS = ['#ffb020', '#2f81f7', '#2ea043', '#e05561', '#a06bf0', '#00b8a9'];
 
 async function viewSettings(seg) {
+  // Меню цей пункт комірнику не показує, але адресу можна ввести руками —
+  // краще пояснити, ніж малювати порожню сторінку з помилками.
+  if (!can('admin')) {
+    app.innerHTML = `<div class="card">
+      <h1>Налаштування</h1>
+      <p class="muted">Розділ доступний лише адміністратору. Ви увійшли як
+        <b>${esc(ME.user?.name || ME.user?.login || '')}</b> (${esc(ME.user?.role === 'worker' ? 'комірник' : 'перегляд')}).</p>
+      <a href="#/scan"><button class="primary">До сканування</button></a>
+    </div>`;
+    return;
+  }
   const tab = seg[1] || 'appearance';
   const st = await api('/settings');
   applySettings(st);
@@ -105,13 +118,17 @@ async function viewSettings(seg) {
       <div class="subnav">
         <a href="#/settings/appearance" class="${tab === 'appearance' ? 'active' : ''}">Вигляд</a>
         <a href="#/settings/security" class="${tab === 'security' ? 'active' : ''}">Безпека</a>
+        <a href="#/settings/users" class="${tab === 'users' ? 'active' : ''}">Користувачі</a>
         <a href="#/settings/integrations" class="${tab === 'integrations' ? 'active' : ''}">Інтеграції</a>
+        <a href="#/settings/data" class="${tab === 'data' ? 'active' : ''}">Дані</a>
       </div>
       <div id="settingsBody"></div>
     </div>`;
 
   if (tab === 'security') return renderSecurity($('#settingsBody'));
   if (tab === 'integrations') return renderIntegrations($('#settingsBody'));
+  if (tab === 'users') return renderUsers($('#settingsBody'));
+  if (tab === 'data') return renderData($('#settingsBody'));
   renderAppearance($('#settingsBody'), st);
 }
 
@@ -178,6 +195,113 @@ function renderAppearance(box, st) {
   });
 }
 
+async function renderUsers(box) {
+  const { users, roles } = await api('/users');
+  const roleName = (k) => roles.find((r) => r.key === k)?.label || k;
+
+  box.innerHTML = `
+    <div class="row"><h2 class="grow">Користувачі</h2>
+      <button class="primary sm" id="addUser">＋ Додати</button></div>
+
+    ${users.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Логін</th><th>Ім'я</th><th>Роль</th><th>Стан</th><th>Останній вхід</th><th></th></tr></thead>
+      <tbody>${users.map((u) => `<tr>
+        <td class="mono">${esc(u.login)}</td>
+        <td>${esc(u.name || '')}</td>
+        <td>${esc(roleName(u.role))}</td>
+        <td>${u.active ? '<span class="badge ok">активний</span>' : '<span class="badge err">вимкнений</span>'}</td>
+        <td class="small muted">${esc(u.last_login || '—')}</td>
+        <td class="nowrap">
+          <button class="sm ghost" data-edituser="${u.id}">Змінити</button>
+          <button class="sm danger" data-deluser="${u.id}">✕</button>
+        </td>
+      </tr>`).join('')}</tbody></table></div>`
+      : `<div class="hint">Користувачів ще немає, вхід іде спільним паролем.
+          Щойно ви додасте першого користувача, вхід почне вимагати логін —
+          тому першим створіть саме себе з роллю «Адміністратор».</div>`}
+
+    <h3 style="margin-top:16px">Що можуть ролі</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Роль</th><th>Права</th></tr></thead>
+      <tbody>
+        <tr><td><b>Адміністратор</b></td><td class="small">Усе, включно з налаштуваннями, складами, категоріями й користувачами.</td></tr>
+        <tr><td><b>Комірник</b></td><td class="small">Прихід, видача, переміщення, інвентаризація, створення та редагування товарів. Не змінює склади, категорії й налаштування.</td></tr>
+        <tr><td><b>Перегляд</b></td><td class="small">Тільки дивиться: пошук, залишки, де що лежить. Нічого не змінює.</td></tr>
+      </tbody>
+    </table></div>`;
+
+  box.querySelector('#addUser').addEventListener('click', () => dlgUser(null, roles));
+  box.querySelectorAll('[data-edituser]').forEach((b) => b.addEventListener('click', () =>
+    dlgUser(users.find((u) => u.id === Number(b.dataset.edituser)), roles)));
+  box.querySelectorAll('[data-deluser]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('Видалити користувача? Його записи в історії залишаться.')) return;
+    try { await api(`/users/${b.dataset.deluser}`, { method: 'DELETE' }); route(); }
+    catch (e) { toast(e.message, 'err'); }
+  }));
+}
+
+function dlgUser(u, roles) {
+  const bg = modal(`
+    <h2>${u ? 'Змінити користувача' : 'Новий користувач'}</h2>
+    <form id="f">
+      ${u ? `<p class="small muted">Логін: <b class="mono">${esc(u.login)}</b></p>`
+          : '<label class="field"><span>Логін *</span><input id="login" autocapitalize="off" placeholder="petro" required></label>'}
+      <label class="field"><span>Ім'я</span><input id="name" value="${esc(u?.name || '')}" placeholder="Петро"></label>
+      <label class="field"><span>Роль</span>
+        <select id="role">${roles.map((r) => `<option value="${r.key}" ${u?.role === r.key ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}</select></label>
+      <label class="field"><span>${u ? 'Новий пароль (лишіть порожнім, щоб не міняти)' : 'Пароль *'}</span>
+        <input type="password" id="password" ${u ? '' : 'required minlength="6"'}></label>
+      ${u ? `<label class="field"><span>Стан</span>
+        <select id="active">
+          <option value="1" ${u.active ? 'selected' : ''}>Активний</option>
+          <option value="0" ${!u.active ? 'selected' : ''}>Вимкнений</option>
+        </select></label>` : ''}
+      <div class="row"><button class="primary grow">Зберегти</button>
+        <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
+    </form>`);
+
+  bg.querySelector('#f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      name: bg.querySelector('#name').value,
+      role: bg.querySelector('#role').value,
+      password: bg.querySelector('#password').value || undefined,
+    };
+    try {
+      if (u) {
+        body.active = Number(bg.querySelector('#active').value);
+        await api(`/users/${u.id}`, { method: 'PUT', body });
+      } else {
+        body.login = bg.querySelector('#login').value;
+        await api('/users', { method: 'POST', body });
+      }
+      closeModal(); route();
+    } catch (err) { toast(err.message, 'err'); }
+  });
+}
+
+function renderData(box) {
+  box.innerHTML = `
+    <h2>Дані</h2>
+    <p class="muted small">Вивантаження у CSV з роздільником «крапка з комою» — Excel відкриває такий файл одразу.</p>
+    <div class="row">
+      <a href="/api/export/products.csv"><button>⭳ Товари із залишками</button></a>
+      <a href="/api/export/movements.csv"><button>⭳ Історія рухів</button></a>
+      <a href="/api/export/locations.csv"><button>⭳ Місця зберігання</button></a>
+    </div>
+
+    <h3 style="margin-top:18px">Завантаження</h3>
+    <div class="row">
+      <a href="#/import"><button class="primary">⭱ Імпорт товарів із файлу</button></a>
+      <a href="/api/export/template.csv"><button class="ghost">Зразок файлу</button></a>
+    </div>
+
+    <h3 style="margin-top:18px">Резервні копії</h3>
+    <p class="small muted">Копія бази робиться автоматично при кожному запуску додатка
+      і зберігається в каталозі <code class="mono">data/backups</code> — останні 10 штук.
+      Уся база — це один файл <code class="mono">data/sklad.db</code>, його можна просто скопіювати.</p>`;
+}
+
 async function renderSecurity(box) {
   const sec = await api('/security');
   box.innerHTML = `
@@ -238,25 +362,41 @@ async function renderSecurity(box) {
 
 function renderLogin() {
   $('#sidebar').hidden = true;
+  const withLogin = SETTINGS?.needs_login;
   app.innerHTML = `
     <div class="card" style="max-width:380px;margin:12vh auto">
       <h1>${esc(SETTINGS?.brand || 'Inventa')}</h1>
       <p class="muted small">Складський облік зі штрих-кодами.</p>
-      <p class="muted small">Введіть пароль доступу.</p>
       <form id="loginForm">
-        <label class="field"><span>Пароль</span><input type="password" id="pw" autofocus></label>
+        ${withLogin ? '<label class="field"><span>Логін</span><input id="lg" autocapitalize="off" autofocus></label>' : ''}
+        <label class="field"><span>Пароль</span><input type="password" id="pw" ${withLogin ? '' : 'autofocus'}></label>
         <button class="primary" style="width:100%">Увійти</button>
       </form>
     </div>`;
   $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      await api('/login', { method: 'POST', body: { password: $('#pw').value } });
+      const body = { password: $('#pw').value };
+      if (withLogin) body.login = $('#lg').value;
+      await api('/login', { method: 'POST', body });
+      ME = await api('/me');
       $('#sidebar').hidden = false;
+      applyRoleToMenu();
       location.hash = '#/scan';
       route();
     } catch (err) { toast(err.message, 'err'); }
   });
+}
+
+// Ховаємо від комірника те, чого йому все одно не дозволить сервер.
+function applyRoleToMenu() {
+  const settingsLink = document.querySelector('.side nav a[href="#/settings"]');
+  if (settingsLink) settingsLink.hidden = !can('admin');
+  const who = $('#whoami');
+  if (who && ME.user) {
+    who.textContent = ME.user.name || ME.user.login || '';
+    who.hidden = !ME.user.name && !ME.user.login;
+  }
 }
 
 /* ============================================================ сканування */
@@ -405,10 +545,23 @@ function productCardHtml(p) {
       </div>
       <div style="text-align:center">
         <svg data-code="${esc(p.barcode)}" data-h="46"></svg>
+        ${p.extra_barcodes?.length ? `<div class="small muted mono" style="margin-top:4px">
+          + ${p.extra_barcodes.map(esc).join(', ')}</div>` : ''}
       </div>
     </div>
+    ${p.photos?.length ? `<div class="photos">${p.photos.map((ph) => `
+      <div class="photo" data-photo="${ph.id}">
+        <img src="/uploads/${esc(ph.file)}" alt="${esc(p.name)}" loading="lazy">
+        <div class="photo-tools">
+          <button class="sm ghost" data-main="${ph.id}" title="Зробити головним">★</button>
+          <button class="sm danger" data-delphoto="${ph.id}" title="Видалити">✕</button>
+        </div>
+      </div>`).join('')}</div>` : ''}
+
     <div class="row" style="margin-top:10px">
       <button class="primary sm" data-act="in" data-product="${p.id}">＋ Прийняти на склад</button>
+      <label class="sm photo-add">📷 Додати фото
+        <input type="file" accept="image/*" data-photo-for="${p.id}" hidden multiple></label>
       <button class="sm" data-act="edit-product" data-product="${p.id}">Редагувати</button>
       <a class="sm" href="#/labels?product=${p.id}"><button class="sm">🖨 Наклейка</button></a>
       <a class="sm" href="#/history?product=${p.id}"><button class="sm ghost">Історія</button></a>
@@ -506,8 +659,64 @@ async function openLocation(locId) {
 
 /* ============================================ дії над залишками */
 
+// Фото стискаємо в браузері: на склад знімають телефоном, а це 3–6 МБ на кадр.
+function shrinkImage(file, max = 1280, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Не вдалося прочитати файл'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Це не зображення'));
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function bindPhotoActions(root) {
+  root.querySelectorAll('[data-photo-for]').forEach((inp) => inp.addEventListener('change', async () => {
+    const pid = inp.dataset.photoFor;
+    try {
+      for (const file of [...inp.files]) {
+        const data = await shrinkImage(file);
+        await api(`/products/${pid}/photos`, { method: 'POST', body: { data } });
+      }
+      toast('Фото додано', 'ok');
+      refreshAfter(Number(pid));
+    } catch (e) { toast(e.message, 'err'); }
+  }));
+
+  root.querySelectorAll('[data-delphoto]').forEach((b) => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!confirm('Видалити це фото?')) return;
+    await api(`/photos/${b.dataset.delphoto}`, { method: 'DELETE' });
+    route();
+  }));
+
+  root.querySelectorAll('[data-main]').forEach((b) => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await api(`/photos/${b.dataset.main}/main`, { method: 'POST' });
+    route();
+  }));
+
+  // Клік по фото — перегляд на весь екран.
+  root.querySelectorAll('.photo img').forEach((img) => img.addEventListener('click', () => {
+    const bg = modal(`<img src="${img.src}" style="width:100%;border-radius:10px">`);
+    bg.querySelector('.modal').style.maxWidth = '900px';
+  }));
+}
+
 function bindCardActions(root) {
   paintRacks(root);
+  bindPhotoActions(root);
 
   root.querySelectorAll('[data-open-loc]').forEach((a) =>
     a.addEventListener('click', (e) => { e.preventDefault(); openLocation(a.dataset.openLoc); }));
@@ -686,6 +895,8 @@ async function viewProducts(params) {
     <div class="card">
       <div class="row">
         <h1 class="grow">Товари</h1>
+        <a href="/api/export/products.csv"><button class="ghost">⭳ Експорт</button></a>
+        <a href="#/import"><button class="ghost">⭱ Імпорт</button></a>
         <button class="primary" id="addProduct">＋ Новий товар</button>
       </div>
       <input id="q" placeholder="Пошук: назва, артикул, OEM, модель" value="${esc(q)}" autofocus>
@@ -708,8 +919,11 @@ async function viewProducts(params) {
     const low = $('#low').checked ? '1' : '';
     const items = await api('/products' + qs({ q: $('#q').value, low, category: $('#cat').value, limit: 300 }));
     $('#list').innerHTML = items.length ? `<table>
-      <thead><tr><th>Назва</th><th>Категорія</th><th>Артикул</th><th>Залишок</th><th>Код</th></tr></thead>
+      <thead><tr><th></th><th>Назва</th><th>Категорія</th><th>Артикул</th><th>Залишок</th><th>Код</th></tr></thead>
       <tbody>${items.map((p) => `<tr>
+        <td class="thumb-cell">${p.photo
+          ? `<img class="thumb" src="/uploads/${esc(p.photo)}" alt="" loading="lazy">`
+          : '<span class="thumb thumb-empty">▤</span>'}</td>
         <td><a href="#/product/${p.id}">${esc(p.name)}</a></td>
         <td class="small">${p.category_name ? `<span class="badge">${esc(p.category_name)}</span>` : ''}</td>
         <td class="mono small">${esc(p.code)}</td>
@@ -727,6 +941,113 @@ async function viewProducts(params) {
   $('#addProduct').addEventListener('click', () => dlgProduct(null));
   await load();
   if (params.get('new')) dlgProduct({ name: params.get('new') });
+}
+
+/* ------------------------------------------------------- імпорт з файлу */
+
+async function viewImport() {
+  const cats = await api('/categories');
+  app.innerHTML = `
+    <div class="card">
+      <div class="row"><h1 class="grow">Імпорт товарів</h1>
+        <a href="#/products"><button class="ghost sm">← до товарів</button></a></div>
+      <p class="muted small">Файл CSV із заголовками в першому рядку. Відомі колонки:
+        <b>Назва</b> (обов'язкова), Артикул, Штрих-код, Категорія, Одиниця, Ціна,
+        Мінімальний залишок, Кількість, Місце, Примітка. Колонки, названі так само, як поля
+        вибраної категорії, теж підхопляться. Excel зберігає з крапкою з комою — це нормально.</p>
+      <div class="row">
+        <label class="sm photo-add">📂 Вибрати файл<input type="file" id="file" accept=".csv,text/csv,text/plain" hidden></label>
+        <a href="/api/export/template.csv"><button class="sm ghost">Завантажити зразок</button></a>
+        <label class="field grow" style="margin:0"><span>Категорія за замовчуванням</span>
+          <select id="cat">${categoryOptions(cats, null, '— без категорії —')}</select></label>
+      </div>
+      <label class="field" style="margin-top:10px"><span>Або вставте вміст файлу сюди</span>
+        <textarea id="text" style="min-height:120px;font-family:ui-monospace,monospace;font-size:12px"
+          placeholder="Назва;Артикул;Кількість;Місце"></textarea></label>
+      <div class="row">
+        <button class="primary" id="analyze">Перевірити</button>
+      </div>
+    </div>
+    <div id="preview"></div>`;
+
+  $('#file').addEventListener('change', async () => {
+    const f = $('#file').files[0];
+    if (f) { $('#text').value = await f.text(); toast(`Файл «${f.name}» прочитано`, 'ok'); }
+  });
+
+  $('#analyze').addEventListener('click', async () => {
+    const text = $('#text').value.trim();
+    if (!text) return toast('Спершу виберіть файл або вставте текст', 'err');
+    try {
+      const plan = await api('/import/analyze', { method: 'POST', body: { text, category_id: $('#cat').value || null } });
+      renderImportPreview(plan, text);
+    } catch (e) { toast(e.message, 'err'); }
+  });
+}
+
+// Показуємо, що саме станеться, і лише потім даємо кнопку «Імпортувати».
+function renderImportPreview(plan, text) {
+  const box = $('#preview');
+  const rows = plan.items.slice(0, 50);
+  box.innerHTML = `
+    <div class="card">
+      <h2>Що буде зроблено</h2>
+      <div class="stats">
+        <div class="stat"><b>${plan.summary.total}</b><span>рядків</span></div>
+        <div class="stat"><b>${plan.summary.create}</b><span>нових товарів</span></div>
+        <div class="stat"><b>${plan.summary.update}</b><span>оновиться</span></div>
+        <div class="stat"><b>${plan.summary.with_stock}</b><span>з розміщенням</span></div>
+      </div>
+      <p class="small muted" style="margin-top:10px">Розпізнані колонки: ${plan.recognized.map(esc).join(', ') || '—'}
+        ${plan.ignored.length ? `· <span class="muted">пропущені: ${plan.ignored.map(esc).join(', ')}</span>` : ''}</p>
+
+      ${plan.problems.length ? `<div class="hint" style="border-color:#7a4a12;background:rgba(255,176,32,.12);color:#ffd08a">
+        <b>Зауваження (${plan.problems.length}):</b>
+        <ul style="margin:6px 0 0 18px">${plan.problems.slice(0, 15)
+          .map((p) => `<li>рядок ${p.line}: ${esc(p.text)}</li>`).join('')}</ul>
+      </div>` : ''}
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Рядок</th><th>Дія</th><th>Назва</th><th>Артикул</th><th>К-сть</th><th>Місце</th></tr></thead>
+        <tbody>${rows.map((i) => `<tr>
+          <td class="small muted">${i.line}</td>
+          <td><span class="badge ${i.action === 'create' ? 'ok' : 'warn'}">${i.action === 'create' ? 'новий' : 'оновити'}</span></td>
+          <td>${esc(i.name)}</td>
+          <td class="mono small">${esc(i.code)}</td>
+          <td>${i.qty || ''}</td>
+          <td class="small ${i.qty && !i.location_id ? 'muted' : ''}">${esc(i.location_label)}${i.qty && !i.location_id ? ' (не знайдено)' : ''}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      ${plan.items.length > rows.length ? `<p class="small muted">…і ще ${plan.items.length - rows.length} рядків</p>` : ''}
+
+      <label class="small muted" style="display:block;margin-top:10px">
+        <input type="checkbox" id="upd" checked style="width:auto"> оновлювати товари, що вже є</label>
+      <label class="small muted" style="display:block">
+        <input type="checkbox" id="stk" checked style="width:auto"> одразу оприбуткувати кількість у вказані місця</label>
+
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="run">Імпортувати ${plan.summary.total} позицій</button>
+      </div>
+    </div>`;
+
+  box.querySelector('#run').addEventListener('click', async () => {
+    const btn = box.querySelector('#run');
+    btn.disabled = true; btn.textContent = 'Імпортую…';
+    try {
+      const res = await api('/import/run', { method: 'POST', body: {
+        text,
+        category_id: $('#cat').value || null,
+        update_existing: box.querySelector('#upd').checked,
+        add_stock: box.querySelector('#stk').checked,
+      } });
+      toast(`Створено ${res.created}, оновлено ${res.updated}, розміщено ${res.placed}`, 'ok');
+      location.hash = '#/products';
+    } catch (e) {
+      toast(e.message, 'err');
+      btn.disabled = false; btn.textContent = 'Спробувати ще раз';
+    }
+  });
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* ---------------------------------------------------------- категорії */
@@ -990,6 +1311,9 @@ async function dlgProduct(p) {
 
       <div id="customFields"></div>
 
+      <label class="field"><span>Штрих-коди з упаковки — по одному в рядок</span>
+        <textarea id="extra_barcodes" placeholder="4820012345678">${esc((p?.extra_barcodes || []).join('\n'))}</textarea>
+        <em class="muted small">Заводські коди виробника. Свій код товару додаток створює сам.</em></label>
       <label class="field"><span>Примітка</span><textarea id="note">${v('note')}</textarea></label>
       <div class="row">
         <button class="primary grow">Зберегти</button>
@@ -1039,6 +1363,8 @@ async function dlgProduct(p) {
       const saved = p?.id
         ? await api(`/products/${p.id}`, { method: 'PUT', body })
         : await api('/products', { method: 'POST', body });
+      const codes = bg.querySelector('#extra_barcodes').value.split('\n').map((x) => x.trim()).filter(Boolean);
+      await api(`/products/${saved.id}/barcodes`, { method: 'PUT', body: { codes } });
       closeModal();
       toast('Збережено', 'ok');
       if (!p?.id) location.hash = `#/product/${saved.id}`; else route();
@@ -1806,9 +2132,10 @@ async function viewHistory(params) {
   const T = { in: '＋ прихід', out: '− видача', move: '→ переміщення', adjust: '= перерахунок' };
   app.innerHTML = `
     <div class="card">
-      <h1>Історія рухів${productId ? ' (один товар)' : ''}</h1>
+      <div class="row"><h1 class="grow">Історія рухів${productId ? ' (один товар)' : ''}</h1>
+        <a href="/api/export/movements.csv"><button class="ghost sm">⭳ Експорт</button></a></div>
       ${rows.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Коли</th><th>Що</th><th>Товар</th><th>Звідки</th><th>Куди</th><th>К-сть</th><th>Коментар</th></tr></thead>
+        <thead><tr><th>Коли</th><th>Що</th><th>Товар</th><th>Звідки</th><th>Куди</th><th>К-сть</th><th>Хто</th><th>Коментар</th></tr></thead>
         <tbody>${rows.map((m) => `<tr>
           <td class="small nowrap">${esc(m.ts)}</td>
           <td class="small nowrap">${T[m.type] || m.type}</td>
@@ -1816,6 +2143,7 @@ async function viewHistory(params) {
           <td class="small muted">${esc(m.from_label || '')}</td>
           <td class="small muted">${esc(m.to_label || '')}</td>
           <td><b>${m.qty}</b></td>
+          <td class="small">${esc(m.user_name || '')}</td>
           <td class="small muted">${esc(m.note || '')}</td>
         </tr>`).join('')}</tbody></table></div>` : '<p class="muted">Рухів ще не було.</p>'}
     </div>`;
@@ -1932,6 +2260,7 @@ async function route() {
     switch (seg[0]) {
       case 'scan': return viewScan();
       case 'products': return viewProducts(params);
+      case 'import': return viewImport();
       case 'categories': return viewCategories();
       case 'product': return viewProduct(seg[1]);
       case 'warehouses': return viewWarehouses();
@@ -1959,9 +2288,10 @@ $('#logoutBtn').addEventListener('click', async () => {
 (async function boot() {
   // Тему й назву тягнемо ще до перевірки входу, щоб екран логіна вже був у вашому вигляді.
   try { applySettings(await api('/public-settings')); } catch (e) { /* лишиться типовий вигляд */ }
-  const { authed } = await api('/me');
-  if (!authed) return renderLogin();
+  ME = await api('/me');
+  if (!ME.authed) return renderLogin();
   $('#sidebar').hidden = false;
+  applyRoleToMenu();
   if (!location.hash) location.hash = '#/scan';
   route();
 })();
