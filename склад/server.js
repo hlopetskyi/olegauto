@@ -81,11 +81,19 @@ api.delete('/warehouses/:id', wrap((req) => (S.deleteWarehouse(id(req)), { ok: t
 
 // стелажі
 api.get('/warehouses/:id/racks', wrap((req) => S.listRacks(id(req))));
+api.get('/warehouses/:id/plan', wrap((req) => S.warehousePlan(id(req))));
+api.put('/warehouses/:id/plan', wrap((req) => S.updateWarehousePlan(id(req), req.body)));
 api.post('/racks', wrap((req) => S.createRack(req.body)));
 api.get('/racks/:id/grid', wrap((req) => S.rackGrid(id(req))));
 api.put('/racks/:id', wrap((req) => S.updateRack(id(req), req.body)));
-api.post('/racks/:id/resize', wrap((req) => S.resizeRack(id(req), Number(req.body.rows), Number(req.body.cols))));
+api.put('/racks/:id/position', wrap((req) => S.setRackPosition(id(req), req.body)));
 api.delete('/racks/:id', wrap((req) => (S.deleteRack(id(req)), { ok: true })));
+
+// комірки стелажа — довільна схема, редагується поштучно
+api.post('/racks/:id/cells', wrap((req) => S.addCell(id(req), Number(req.body.row), Number(req.body.col), req.body.label)));
+api.post('/racks/:id/cell-row', wrap((req) => S.addCellRow(id(req), Number(req.body.count), req.body.row ?? null)));
+api.delete('/cells/:id', wrap((req) => S.removeCell(id(req))));
+api.put('/cells/:id/move', wrap((req) => S.moveCell(id(req), Number(req.body.row), Number(req.body.col))));
 
 // місця
 api.get('/locations', wrap((req) => S.listLocations(req.query.warehouse_id ? Number(req.query.warehouse_id) : null)));

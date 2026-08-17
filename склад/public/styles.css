@@ -157,6 +157,74 @@ tbody tr:hover { background: var(--panel-2); }
 .cell .boxes { font-size: 11px; color: var(--muted); }
 .cell.hit .boxes { color: #4a3a10; }
 
+/* ------------------------------------------------- план складу */
+
+.plan-wrap { overflow: auto; padding-bottom: 6px; }
+.plan {
+  display: grid;
+  gap: 2px;
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 100% var(--cell),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / var(--cell) 100%;
+  background-color: #131c27;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 2px;
+  position: relative;
+  min-width: min-content;
+}
+.plan .slot {
+  border-radius: 4px;
+  min-width: var(--cell); min-height: var(--cell);
+}
+.plan.placing .slot { background: rgba(47,129,247,.10); cursor: crosshair; }
+.plan.placing .slot:hover { background: rgba(47,129,247,.35); }
+
+.rack-block {
+  background: var(--panel-2);
+  border: 1px solid #3a5070;
+  border-radius: 8px;
+  padding: 4px;
+  display: flex; flex-direction: column; gap: 3px;
+  overflow: hidden;
+  cursor: pointer;
+  min-width: 0;
+}
+.rack-block:hover { border-color: var(--accent-2); }
+.rack-block.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(255,176,32,.35); }
+.rack-block .rb-name { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rack-block .rb-cells { display: grid; gap: 2px; flex: 1; min-height: 0; }
+.rack-block .rb-cell {
+  background: #26374e; border-radius: 3px; min-height: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: var(--muted); overflow: hidden;
+}
+.rack-block .rb-cell.full { background: #2c5c39; color: #b7f0c6; }
+.rack-block .rb-cell.hit { background: var(--accent); color: #10161f; font-weight: 700; }
+
+.zone-block {
+  background: #2a2438; border: 1px dashed #5a4a7a; border-radius: 8px;
+  padding: 4px; font-size: 11px; overflow: hidden;
+}
+
+/* ------------------------------------------- редактор комірок стелажа */
+
+.editor-grid { display: grid; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
+.slot-empty {
+  min-height: 74px; border: 1px dashed #33455e; border-radius: 8px;
+  background: transparent; color: #3f556f; font-size: 22px; font-weight: 700;
+  cursor: pointer;
+}
+.slot-empty:hover { border-color: var(--accent-2); color: var(--accent-2); background: rgba(47,129,247,.08); }
+.editor-grid .cell.editing { border-color: var(--accent); }
+.cell .cell-tools { display: flex; gap: 3px; margin-top: auto; }
+.cell .cell-tools button { padding: 2px 6px; font-size: 11px; }
+
+.hint {
+  background: rgba(47,129,247,.10); border: 1px solid #2c4a75; border-radius: var(--radius);
+  padding: 8px 12px; font-size: 13px; color: #b9d2f5; margin-bottom: 10px;
+}
+
 /* ---------------------------------------------------------- сканування */
 
 .scan-box { text-align: center; padding: 22px 16px; }

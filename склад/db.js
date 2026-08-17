@@ -131,6 +131,21 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 `);
 
+/* Міграції: доліплюємо колонки до вже існуючих баз, не чіпаючи даних. */
+function addColumn(table, column, decl) {
+  const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+}
+
+// Позиція стелажа на плані складу + як він розвернутий.
+addColumn('racks', 'pos_x', 'INTEGER DEFAULT 0');
+addColumn('racks', 'pos_y', 'INTEGER DEFAULT 0');
+addColumn('racks', 'orientation', "TEXT DEFAULT 'h'");
+addColumn('racks', 'color', "TEXT DEFAULT ''");
+// Розмір «підлоги» складу в клітинках плану.
+addColumn('warehouses', 'plan_w', 'INTEGER DEFAULT 24');
+addColumn('warehouses', 'plan_h', 'INTEGER DEFAULT 14');
+
 // Лічильники штрих-кодів живуть у meta, щоб код не «переїжджав» після видалення рядків.
 function nextSeq(key) {
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key);

@@ -218,6 +218,7 @@ function partCardHtml(p) {
         <button class="sm" data-act="out" data-part="${p.id}" data-loc="${pl.location_id}">Видати</button>
         <button class="sm" data-act="move" data-part="${p.id}" data-loc="${pl.location_id}">Перемістити</button>
         <button class="sm ghost" data-act="adjust" data-part="${p.id}" data-loc="${pl.location_id}">Перерахувати</button>
+        <a href="#/warehouse/${pl.warehouse_id}?hit=${pl.location_id}"><button class="sm ghost">🗺 Показати на плані складу</button></a>
       </div>
     </div>`).join('')
     : '<p class="muted">Ще не розміщено на складі. Натисніть «Прийняти на склад».</p>';
@@ -257,10 +258,13 @@ async function paintRacks(root) {
       const { rack, cells } = await api(`/racks/${node.dataset.rack}/grid`);
       const hitR = Number(node.dataset.hitRow), hitC = Number(node.dataset.hitCol);
       node.style.gridTemplateColumns = `repeat(${rack.cols}, minmax(64px, 1fr))`;
+      // Схема стелажа розріджена — кожну комірку ставимо в її власні координати,
+      // інакше пропуски з'їхали б і підсвітка вказала б не туди.
       node.innerHTML = cells.map((c) => {
         const hit = c.row_idx === hitR && c.col_idx === hitC;
         const cls = hit ? 'hit' : (c.qty > 0 ? 'filled' : 'empty');
-        return `<button class="cell ${cls}" data-loc="${c.id}">
+        return `<button class="cell ${cls}" data-loc="${c.id}"
+            style="grid-column:${c.col_idx + 1};grid-row:${c.row_idx + 1}">
           <span class="lbl">${esc(c.label)}</span>
           <span class="qty">${c.qty || '·'}</span>
           ${c.boxes_count ? `<span class="boxes">${c.boxes_count} кор.</span>` : ''}
@@ -653,87 +657,395 @@ function dlgWarehouse(w) {
   });
 }
 
-async function viewWarehouse(id) {
-  const [wh, racks, locs] = await Promise.all([
-    api('/warehouses').then((all) => all.find((w) => w.id === Number(id))),
-    api(`/warehouses/${id}/racks`),
-    api('/locations' + qs({ warehouse_id: id })),
-  ]);
-  const zones = locs.filter((l) => l.kind === 'zone');
+/* ------------------------------------------------ план складу */
+
+// Габарити стелажа на плані в клітинках: довгий стелаж лежить уздовж або впоперек.
+// Мінімум 2 клітинки завширшки — інакше назва стелажа не влазить і читається як «С…».
+const rackSpan = (r) => r.orientation === 'v'
+  ? { w: Math.max(2, r.cell_rows), h: Math.max(1, r.cell_cols) }
+  : { w: Math.max(2, r.cell_cols), h: Math.max(1, r.cell_rows) };
+
+let planPlacing = null; // id стелажа, який зараз переставляють
+
+async function viewWarehouse(id, params = new URLSearchParams()) {
+  const plan = await api(`/warehouses/${id}/plan`);
+  const { warehouse: wh, racks, zones } = plan;
+  planPlacing = null;
+
+  // Прийшли за посиланням «показати на плані» з картки деталі — підсвітимо потрібну комірку.
+  let hit = null;
+  const hitLoc = params.get('hit');
+  if (hitLoc) {
+    try {
+      const { location } = await api(`/locations/${hitLoc}`);
+      const cellId = location.parent_id || location.id;
+      const target = location.parent_id ? (await api(`/locations/${location.parent_id}`)).location : location;
+      hit = { rack_id: target.rack_id, row: target.row_idx, col: target.col_idx, label: target.label, cell_id: cellId };
+    } catch (e) { /* місце могли видалити — просто покажемо план */ }
+  }
 
   app.innerHTML = `
     <div class="card">
       <div class="row">
-        <div class="grow"><h1>${esc(wh?.name ?? 'Склад')}</h1>
-          <div class="muted small">${esc(wh?.address ?? '')}</div></div>
+        <div class="grow"><h1>${esc(wh.name)}</h1>
+          <div class="muted small">${esc(wh.address || '')}</div></div>
         <button class="primary sm" id="addRack">＋ Стелаж</button>
         <button class="sm" id="addZone">＋ Вільне місце</button>
+        <button class="sm ghost" id="planSize">Розмір плану</button>
       </div>
     </div>
-    ${racks.map((r) => `
-      <div class="card">
-        <div class="row">
-          <h2 class="grow">${esc(r.name)} <span class="muted small">${r.rows}×${r.cols}</span></h2>
-          <button class="sm ghost" data-edit-rack="${r.id}">Змінити</button>
-          <a href="#/labels?rack=${r.id}"><button class="sm">🖨 Наклейки стелажа</button></a>
-        </div>
-        <div class="rack" data-rack="${r.id}"></div>
-      </div>`).join('')}
-    ${zones.length ? `<div class="card"><h2>Вільні місця (без стелажа)</h2>
-      <div class="table-wrap"><table><tbody>${zones.map((z) => `<tr>
-        <td><a href="#" data-open-loc="${z.id}">${esc(z.label)}</a></td>
-        <td class="mono small">${esc(z.barcode)}</td><td>${z.qty} шт</td></tr>`).join('')}</tbody></table></div></div>` : ''}
-    ${!racks.length && !zones.length ? '<div class="card muted">Ще нічого немає. Створіть стелаж — комірки й штрих-коди зроблю автоматично.</div>' : ''}`;
 
-  await paintRacks(app);
-  app.querySelectorAll('[data-open-loc]').forEach((a) =>
-    a.addEventListener('click', (e) => { e.preventDefault(); openLocation(a.dataset.openLoc); }));
+    ${hit ? `<div class="hint">Шукана деталь лежить тут: <b>${esc(hit.label)}</b> — підсвічено на плані.</div>` : ''}
+
+    <div class="card">
+      <div class="row">
+        <h2 class="grow">План складу</h2>
+        <span class="muted small" id="planHint">Перетягніть стелаж мишею або торкніться його й потім вкажіть нове місце.</span>
+      </div>
+      <div class="plan-wrap"><div class="plan" id="plan"></div></div>
+    </div>
+
+    ${!racks.length && !zones.length
+      ? '<div class="card muted">Порожньо. Створіть стелаж — і одразу намалюєте його схему під свої ящики.</div>'
+      : ''}`;
+
+  drawPlan(plan, hit);
   $('#addRack').addEventListener('click', () => dlgRack(null, id));
   $('#addZone').addEventListener('click', () => dlgZone(id));
-  app.querySelectorAll('[data-edit-rack]').forEach((b) =>
-    b.addEventListener('click', () => dlgRack(racks.find((r) => r.id === Number(b.dataset.editRack)), id)));
+  $('#planSize').addEventListener('click', () => dlgPlanSize(wh));
 }
 
-function dlgRack(r, warehouseId) {
+function drawPlan(plan, hit = null) {
+  const { warehouse: wh, racks, zones } = plan;
+  const W = wh.plan_w || 24, H = wh.plan_h || 14;
+  const el = $('#plan');
+  if (!el) return;
+  const cellPx = 30;
+  el.style.setProperty('--cell', cellPx + 'px');
+  el.style.gridTemplateColumns = `repeat(${W}, ${cellPx}px)`;
+  el.style.gridTemplateRows = `repeat(${H}, ${cellPx}px)`;
+
+  // Порожні клітинки підлоги — вони ж мішені, коли переставляємо стелаж.
+  let html = '';
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) html += `<div class="slot" data-x="${x}" data-y="${y}"></div>`;
+  }
+
+  html += racks.map((r) => {
+    const sp = rackSpan(r);
+    const x = Math.min(r.pos_x || 0, Math.max(0, W - sp.w));
+    const y = Math.min(r.pos_y || 0, Math.max(0, H - sp.h));
+    const cols = r.orientation === 'v' ? r.cell_rows : r.cell_cols;
+    const rows = r.orientation === 'v' ? r.cell_cols : r.cell_rows;
+    return `<div class="rack-block" draggable="true" data-rack-id="${r.id}"
+      title="${esc(r.name)} — ${r.cells_count} комірок, ${r.qty} шт"
+      style="grid-column:${x + 1}/span ${sp.w};grid-row:${y + 1}/span ${sp.h}">
+      <div class="rb-name">${esc(r.name)} · ${r.cells_count} ком.</div>
+      <div class="rb-cells" style="grid-template-columns:repeat(${Math.max(1, cols)},1fr);grid-template-rows:repeat(${Math.max(1, rows)},1fr)"
+           data-mini="${r.id}"></div>
+    </div>`;
+  }).join('');
+
+  // Вільні місця вишиковуємо знизу плану, з переносом на рядок вище, якщо не влазять.
+  const perRow = Math.max(1, Math.floor(W / 3));
+  html += zones.map((z, i) => {
+    const zx = (i % perRow) * 3;
+    const zy = Math.max(0, H - 1 - Math.floor(i / perRow));
+    return `<div class="zone-block" data-zone="${z.id}"
+      style="grid-column:${zx + 1}/span 3;grid-row:${zy + 1}/span 1">
+      📦 ${esc(z.label)} · ${z.qty} шт
+    </div>`;
+  }).join('');
+
+  el.innerHTML = html;
+  paintMiniCells(racks, hit);
+
+  el.querySelectorAll('.rack-block').forEach((block) => {
+    const rid = Number(block.dataset.rackId);
+    block.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (planPlacing === rid) { planPlacing = null; el.classList.remove('placing'); block.classList.remove('selected'); return; }
+      location.hash = `#/rack/${rid}`;
+    });
+    // Довгий тиск / друге торкання = режим перестановки (працює й на телефоні).
+    block.addEventListener('contextmenu', (e) => { e.preventDefault(); startPlacing(rid); });
+    block.addEventListener('dragstart', (e) => {
+      planPlacing = rid;
+      e.dataTransfer.setData('text/plain', String(rid));
+      el.classList.add('placing');
+    });
+    block.addEventListener('dragend', () => { planPlacing = null; el.classList.remove('placing'); });
+  });
+
+  el.querySelectorAll('.slot').forEach((s) => {
+    s.addEventListener('dragover', (e) => e.preventDefault());
+    s.addEventListener('drop', (e) => { e.preventDefault(); placeRack(Number(s.dataset.x), Number(s.dataset.y)); });
+    s.addEventListener('click', () => { if (planPlacing) placeRack(Number(s.dataset.x), Number(s.dataset.y)); });
+  });
+
+  el.querySelectorAll('[data-zone]').forEach((z) =>
+    z.addEventListener('click', () => openLocation(z.dataset.zone)));
+
+  window.__plan = plan;
+}
+
+function startPlacing(rackId) {
+  planPlacing = rackId;
+  $('#plan').classList.add('placing');
+  $('#plan').querySelector(`[data-rack-id="${rackId}"]`)?.classList.add('selected');
+  $('#planHint').textContent = 'Тепер натисніть на плані місце, куди поставити стелаж.';
+}
+
+async function placeRack(x, y) {
+  const rid = planPlacing;
+  if (!rid) return;
+  planPlacing = null;
+  try {
+    const plan = window.__plan;
+    const r = plan.racks.find((rr) => rr.id === rid);
+    await api(`/racks/${rid}/position`, { method: 'PUT', body: { pos_x: x, pos_y: y, orientation: r.orientation } });
+    r.pos_x = x; r.pos_y = y;
+    drawPlan(plan);
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+// Мініатюрні комірки всередині блока стелажа на плані.
+async function paintMiniCells(racks, hit) {
+  for (const r of racks) {
+    const box = document.querySelector(`[data-mini="${r.id}"]`);
+    if (!box) continue;
+    try {
+      const { cells } = await api(`/racks/${r.id}/grid`);
+      const vertical = r.orientation === 'v';
+      box.innerHTML = cells.map((c) => {
+        const isHit = hit && hit.rack_id === r.id && hit.row === c.row_idx && hit.col === c.col_idx;
+        const cls = isHit ? 'hit' : (c.qty > 0 ? 'full' : '');
+        // При вертикальній орієнтації ряди й секції міняються місцями.
+        const gc = vertical ? c.row_idx + 1 : c.col_idx + 1;
+        const gr = vertical ? c.col_idx + 1 : c.row_idx + 1;
+        return `<div class="rb-cell ${cls}" style="grid-column:${gc};grid-row:${gr}" title="${esc(c.label)}: ${c.qty} шт">${c.qty || ''}</div>`;
+      }).join('');
+    } catch (e) { /* блок лишиться порожнім */ }
+  }
+}
+
+function dlgPlanSize(wh) {
   const bg = modal(`
-    <h2>${r ? 'Змінити стелаж' : 'Новий стелаж'}</h2>
+    <h2>Розмір плану складу</h2>
+    <p class="small muted">Скільки клітинок займає підлога складу. Одна клітинка ≈ одна секція стелажа.</p>
     <form id="f">
-      <label class="field"><span>Назва (коротка, піде в код комірок)</span>
-        <input id="name" value="${esc(r?.name ?? '')}" placeholder="напр. С1" required></label>
       <div class="row">
-        <label class="field grow"><span>Полиць (рядів)</span><input type="number" id="rows" min="1" max="30" value="${r?.rows ?? 4}" required></label>
-        <label class="field grow"><span>Секцій (колонок)</span><input type="number" id="cols" min="1" max="30" value="${r?.cols ?? 5}" required></label>
+        <label class="field grow"><span>Ширина</span><input type="number" id="w" min="4" max="60" value="${wh.plan_w || 24}"></label>
+        <label class="field grow"><span>Висота</span><input type="number" id="h" min="4" max="60" value="${wh.plan_h || 14}"></label>
       </div>
-      <label class="field"><span>Примітка</span><input id="note" value="${esc(r?.note ?? '')}"></label>
-      <p class="small muted">Комірки й штрих-коди для них створяться самі: С1-A1, С1-B1 і так далі.</p>
       <div class="row"><button class="primary grow">Зберегти</button>
-        ${r ? '<button type="button" class="danger" id="del">Видалити</button>' : ''}
         <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
     </form>`);
   bg.querySelector('#f').addEventListener('submit', async (e) => {
     e.preventDefault();
+    await api(`/warehouses/${wh.id}/plan`, { method: 'PUT', body: {
+      plan_w: Number(bg.querySelector('#w').value), plan_h: Number(bg.querySelector('#h').value),
+    } });
+    closeModal(); route();
+  });
+}
+
+/* ------------------------------------------- створення / зміна стелажа */
+
+function dlgRack(r, warehouseId) {
+  const isNew = !r;
+  const bg = modal(`
+    <h2>${isNew ? 'Новий стелаж' : 'Змінити стелаж'}</h2>
+    <form id="f">
+      <label class="field"><span>Назва (коротка, піде в код комірок)</span>
+        <input id="name" value="${esc(r?.name ?? '')}" placeholder="напр. С1" required></label>
+      ${isNew ? `
+      <label class="field"><span>Як задати комірки</span>
+        <select id="mode">
+          <option value="strip">Один довгий ряд — вкажу скільки ящиків</option>
+          <option value="grid">Прямокутник: полиць × секцій</option>
+          <option value="empty">Порожній — намалюю схему сам</option>
+        </select></label>
+      <label class="field" id="wrapCount"><span>Скільки ящиків (комірок) у ряд</span>
+        <input type="number" id="count" min="1" max="60" value="8"></label>
+      <div class="row" id="wrapGrid" hidden>
+        <label class="field grow"><span>Полиць (рядів)</span><input type="number" id="rows" min="1" max="30" value="3"></label>
+        <label class="field grow"><span>Секцій (колонок)</span><input type="number" id="cols" min="1" max="30" value="5"></label>
+      </div>` : ''}
+      <label class="field"><span>Примітка</span><input id="note" value="${esc(r?.note ?? '')}"></label>
+      <p class="small muted">Це лише стартова заготовка. Далі в схемі стелажа комірки можна додавати,
+        прибирати й перетягувати поштучно — рівно під ваші ящики.</p>
+      <div class="row"><button class="primary grow">Зберегти</button>
+        ${r ? '<button type="button" class="danger" id="del">Видалити</button>' : ''}
+        <button type="button" class="ghost" onclick="this.closest('.modal-bg').remove()">Скасувати</button></div>
+    </form>`);
+
+  const mode = bg.querySelector('#mode');
+  mode?.addEventListener('change', () => {
+    bg.querySelector('#wrapCount').hidden = mode.value !== 'strip';
+    bg.querySelector('#wrapGrid').hidden = mode.value !== 'grid';
+  });
+
+  bg.querySelector('#f').addEventListener('submit', async (e) => {
+    e.preventDefault();
     const name = bg.querySelector('#name').value;
-    const rows = Number(bg.querySelector('#rows').value);
-    const cols = Number(bg.querySelector('#cols').value);
     const note = bg.querySelector('#note').value;
     try {
       if (r) {
-        await api(`/racks/${r.id}`, { method: 'PUT', body: { name, note } });
-        if (rows !== r.rows || cols !== r.cols) {
-          const res = await api(`/racks/${r.id}/resize`, { method: 'POST', body: { rows, cols } });
-          toast(`Сітку змінено. Прибрано порожніх комірок: ${res.removed}`, 'ok');
-        }
+        await api(`/racks/${r.id}`, { method: 'PUT', body: { name, note, color: r.color || '' } });
+        closeModal(); route();
       } else {
-        await api('/racks', { method: 'POST', body: { warehouse_id: Number(warehouseId), name, rows, cols, note } });
+        const created = await api('/racks', { method: 'POST', body: {
+          warehouse_id: Number(warehouseId), name, note,
+          mode: mode.value,
+          count: Number(bg.querySelector('#count').value) || 1,
+          rows: Number(bg.querySelector('#rows').value) || 1,
+          cols: Number(bg.querySelector('#cols').value) || 1,
+        } });
+        closeModal();
+        location.hash = `#/rack/${created.id}`;
       }
-      closeModal(); route();
     } catch (err) { toast(err.message, 'err'); }
   });
+
   bg.querySelector('#del')?.addEventListener('click', async () => {
     if (!confirm('Видалити стелаж з усіма комірками і залишками в них?')) return;
     await api(`/racks/${r.id}`, { method: 'DELETE' });
-    closeModal(); route();
+    closeModal(); location.hash = `#/warehouse/${warehouseId}`;
   });
+}
+
+/* ------------------------------------- редактор схеми одного стелажа */
+
+let editingRack = false;
+let movingCell = null;
+
+async function viewRack(rackId) {
+  const { rack, cells } = await api(`/racks/${rackId}/grid`);
+  const maxR = Math.max(rack.rows, 1), maxC = Math.max(rack.cols, 1);
+  // Полотно трохи більше за наявні комірки — щоб було куди дорощувати.
+  const padR = editingRack ? Math.min(maxR + 2, 20) : maxR;
+  const padC = editingRack ? Math.min(maxC + 3, 30) : maxC;
+  const byPos = new Map(cells.map((c) => [`${c.row_idx}:${c.col_idx}`, c]));
+
+  let grid = '';
+  for (let r = 0; r < padR; r++) {
+    for (let c = 0; c < padC; c++) {
+      const cell = byPos.get(`${r}:${c}`);
+      if (cell) {
+        grid += `<div class="cell ${cell.qty > 0 ? 'filled' : 'empty'}" data-cell="${cell.id}"
+            data-r="${r}" data-c="${c}" style="grid-column:${c + 1};grid-row:${r + 1}">
+          <span class="lbl">${esc(cell.label)}</span>
+          <span class="qty">${cell.qty || '·'}</span>
+          ${cell.boxes_count ? `<span class="boxes">${cell.boxes_count} кор.</span>` : ''}
+          ${editingRack ? `<span class="cell-tools">
+            <button class="sm" data-ren="${cell.id}" title="Перейменувати">✎</button>
+            <button class="sm" data-mv="${cell.id}" title="Перемістити">✥</button>
+            <button class="sm danger" data-rm="${cell.id}" title="Прибрати">✕</button>
+          </span>` : ''}
+        </div>`;
+      } else if (editingRack) {
+        grid += `<button class="slot-empty" data-add-r="${r}" data-add-c="${c}"
+            style="grid-column:${c + 1};grid-row:${r + 1}">＋</button>`;
+      }
+    }
+  }
+
+  app.innerHTML = `
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <h1>${esc(rack.name)}</h1>
+          <div class="muted small">
+            <a href="#/warehouse/${rack.warehouse_id}">← до плану складу</a> ·
+            комірок: ${cells.length} · ${esc(rack.note || '')}
+          </div>
+        </div>
+        <button class="${editingRack ? 'primary' : ''} sm" id="editToggle">
+          ${editingRack ? '✓ Готово' : '✎ Редагувати схему'}</button>
+        <button class="sm ghost" id="rotate">↻ ${rack.orientation === 'v' ? 'Покласти горизонтально' : 'Поставити вертикально'}</button>
+        <a href="#/labels?rack=${rack.id}"><button class="sm">🖨 Наклейки</button></a>
+        <button class="sm ghost" id="rackSettings">Налаштування</button>
+      </div>
+    </div>
+
+    ${editingRack ? `<div class="hint">
+      Натисніть <b>＋</b>, щоб додати комірку саме там, де в реальності стоїть ящик.
+      На комірці: <b>✎</b> перейменувати, <b>✥</b> перемістити, <b>✕</b> прибрати.
+      Комірку з товаром прибрати не вийде — спершу заберіть звідти деталі.
+    </div>
+    <div class="card">
+      <div class="row">
+        <button class="sm" id="addRow">＋ Додати ряд знизу</button>
+        <input type="number" id="rowCount" value="${Math.max(maxC, 1)}" min="1" max="60" style="width:90px">
+        <span class="muted small">комірок у ряду</span>
+      </div>
+    </div>` : ''}
+
+    <div class="card">
+      <div class="editor-grid" id="eg"
+           style="grid-template-columns:repeat(${padC}, minmax(76px, 1fr))">${grid}</div>
+      ${!cells.length ? '<p class="muted">Комірок ще немає. Увімкніть «Редагувати схему» і натискайте ＋ там, де стоять ящики.</p>' : ''}
+    </div>`;
+
+  $('#editToggle').addEventListener('click', () => { editingRack = !editingRack; movingCell = null; viewRack(rackId); });
+
+  $('#rotate').addEventListener('click', async () => {
+    await api(`/racks/${rackId}/position`, { method: 'PUT', body: {
+      pos_x: rack.pos_x, pos_y: rack.pos_y, orientation: rack.orientation === 'v' ? 'h' : 'v',
+    } });
+    viewRack(rackId);
+  });
+
+  $('#rackSettings').addEventListener('click', () => dlgRack(rack, rack.warehouse_id));
+
+  $('#addRow')?.addEventListener('click', async () => {
+    try {
+      const res = await api(`/racks/${rackId}/cell-row`, { method: 'POST', body: { count: Number($('#rowCount').value) } });
+      toast(`Додано комірок: ${res.added}`, 'ok');
+      viewRack(rackId);
+    } catch (e) { toast(e.message, 'err'); }
+  });
+
+  // Клік по порожньому слоту: або створюємо комірку, або кладемо ту, що переміщуємо.
+  app.querySelectorAll('.slot-empty').forEach((b) => b.addEventListener('click', async () => {
+    const r = Number(b.dataset.addR), c = Number(b.dataset.addC);
+    try {
+      if (movingCell) {
+        await api(`/cells/${movingCell}/move`, { method: 'PUT', body: { row: r, col: c } });
+        movingCell = null;
+      } else {
+        await api(`/racks/${rackId}/cells`, { method: 'POST', body: { row: r, col: c } });
+      }
+      viewRack(rackId);
+    } catch (e) { toast(e.message, 'err'); }
+  }));
+
+  app.querySelectorAll('[data-cell]').forEach((el) => el.addEventListener('click', (e) => {
+    if (e.target.closest('.cell-tools')) return;
+    openLocation(el.dataset.cell);
+  }));
+
+  app.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try { await api(`/cells/${b.dataset.rm}`, { method: 'DELETE' }); viewRack(rackId); }
+    catch (err) { toast(err.message, 'err'); }
+  }));
+
+  app.querySelectorAll('[data-ren]').forEach((b) => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const cell = cells.find((c) => c.id === Number(b.dataset.ren));
+    const name = prompt('Назва комірки (те, що буде на наклейці):', cell.label);
+    if (!name) return;
+    await api(`/locations/${cell.id}`, { method: 'PUT', body: { label: name, note: cell.note || '' } });
+    viewRack(rackId);
+  }));
+
+  app.querySelectorAll('[data-mv]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    movingCell = Number(b.dataset.mv);
+    toast('Тепер натисніть ＋ там, куди перенести комірку');
+  }));
 }
 
 function dlgZone(warehouseId) {
@@ -970,7 +1282,8 @@ async function route() {
       case 'parts': return viewParts(params);
       case 'part': return viewPart(parts[1]);
       case 'warehouses': return viewWarehouses();
-      case 'warehouse': return viewWarehouse(parts[1]);
+      case 'warehouse': return viewWarehouse(parts[1], params);
+      case 'rack': return viewRack(parts[1]);
       case 'labels': return viewLabels(params);
       case 'history': return viewHistory(params);
       case 'integrations': return viewIntegrations();

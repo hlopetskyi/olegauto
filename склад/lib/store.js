@@ -53,64 +53,139 @@ const listRacks = (warehouseId) =>
 
 const getRack = (id) => db.prepare('SELECT * FROM racks WHERE id = ?').get(id);
 
-// Створює стелаж і одразу генерує комірки-сітку rows × cols зі своїми штрих-кодами.
-const createRack = db.transaction(({ warehouse_id, name, rows, cols, note = '' }) => {
-  const info = db.prepare('INSERT INTO racks(warehouse_id, name, rows, cols, note) VALUES(?, ?, ?, ?, ?)')
-    .run(warehouse_id, name, rows, cols, note);
+/**
+ * Створює стелаж. Три способи задати комірки:
+ *   mode 'strip' — один довгий ряд із `count` комірок (типовий стелаж із ящиками);
+ *   mode 'grid'  — прямокутник rows × cols;
+ *   mode 'empty' — жодної комірки, малюєте самі в редакторі.
+ * Після створення комірки можна додавати, прибирати й перетягувати поштучно.
+ */
+const createRack = db.transaction((opts) => {
+  const {
+    warehouse_id, name, note = '', color = '',
+    mode = 'grid', count = 0, rows = 1, cols = 1,
+    pos_x = 0, pos_y = 0, orientation = 'h',
+  } = opts;
+
+  // Новий стелаж ставимо під уже наявні, щоб блоки не лягли один на одного.
+  const autoY = pos_y || db.prepare(`
+    SELECT COALESCE(MAX(pos_y + CASE WHEN orientation = 'v' THEN cols ELSE rows END), 0) AS y
+      FROM racks WHERE warehouse_id = ?
+  `).get(warehouse_id).y;
+
+  const info = db.prepare(`
+    INSERT INTO racks(warehouse_id, name, rows, cols, note, color, pos_x, pos_y, orientation)
+    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(warehouse_id, name, 1, 1, note, color, pos_x, autoY, orientation === 'v' ? 'v' : 'h');
   const rackId = info.lastInsertRowid;
+
   const ins = db.prepare(`
     INSERT INTO locations(warehouse_id, rack_id, kind, row_idx, col_idx, label, barcode)
     VALUES(?, ?, 'cell', ?, ?, ?, ?)
   `);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      ins.run(warehouse_id, rackId, r, c, `${name}-${colName(c)}${r + 1}`, newLocationBarcode());
-    }
+  const put = (r, c) => ins.run(warehouse_id, rackId, r, c, autoLabel(name, r, c), newLocationBarcode());
+
+  if (mode === 'strip') {
+    for (let c = 0; c < Math.max(1, count); c++) put(0, c);
+  } else if (mode === 'grid') {
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) put(r, c);
   }
+  syncRackSize(rackId);
   return getRack(rackId);
 });
 
-// Зміна розміру сітки: доліплюємо нові комірки, старі поза межами лишаємо
-// тільки якщо в них є товар (щоб не втратити залишки мовчки).
-const resizeRack = db.transaction((rackId, rows, cols) => {
+// Комірки стелажа — довільний набір координат, а не обов'язково повний прямокутник.
+// Тому «розмір» стелажа рахуємо з самих комірок, а rows/cols у таблиці лишаються
+// лише підказкою для полотна редактора.
+function rackBounds(rackId) {
+  const b = db.prepare(`
+    SELECT COALESCE(MAX(row_idx), -1) AS maxr, COALESCE(MAX(col_idx), -1) AS maxc, COUNT(*) AS n
+      FROM locations WHERE rack_id = ? AND kind = 'cell'
+  `).get(rackId);
+  return { rows: b.maxr + 1, cols: b.maxc + 1, count: b.n };
+}
+
+const cellTaken = (rackId, row, col) =>
+  !!db.prepare("SELECT 1 FROM locations WHERE rack_id = ? AND kind = 'cell' AND row_idx = ? AND col_idx = ?")
+    .get(rackId, row, col);
+
+// Автоназва комірки: «С1-B2» = стелаж С1, друга секція, другий ряд.
+const autoLabel = (rackName, row, col) => `${rackName}-${colName(col)}${row + 1}`;
+
+const addCell = db.transaction((rackId, row, col, label) => {
   const rack = getRack(rackId);
-  if (!rack) return null;
-  const ins = db.prepare(`
+  if (!rack) throw new Error('Стелаж не знайдено');
+  if (cellTaken(rackId, row, col)) throw new Error('Тут уже є комірка');
+  const info = db.prepare(`
     INSERT INTO locations(warehouse_id, rack_id, kind, row_idx, col_idx, label, barcode)
     VALUES(?, ?, 'cell', ?, ?, ?, ?)
-  `);
-  const existing = new Set(
-    db.prepare("SELECT row_idx, col_idx FROM locations WHERE rack_id = ? AND kind = 'cell'").all(rackId)
-      .map((l) => `${l.row_idx}:${l.col_idx}`)
-  );
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (!existing.has(`${r}:${c}`)) {
-        ins.run(rack.warehouse_id, rackId, r, c, `${rack.name}-${colName(c)}${r + 1}`, newLocationBarcode());
-      }
-    }
-  }
-  const orphans = db.prepare(`
-    SELECT l.id FROM locations l
-     WHERE l.rack_id = ? AND l.kind = 'cell'
-       AND (l.row_idx >= ? OR l.col_idx >= ?)
-       AND NOT EXISTS (SELECT 1 FROM stock s WHERE s.location_id = l.id AND s.qty > 0)
-       AND NOT EXISTS (SELECT 1 FROM locations b WHERE b.parent_id = l.id)
-  `).all(rackId, rows, cols);
-  const del = db.prepare('DELETE FROM locations WHERE id = ?');
-  orphans.forEach((o) => del.run(o.id));
-  db.prepare('UPDATE racks SET rows = ?, cols = ? WHERE id = ?').run(rows, cols, rackId);
-  return { rack: getRack(rackId), removed: orphans.length };
+  `).run(rack.warehouse_id, rackId, row, col, label || autoLabel(rack.name, row, col), newLocationBarcode());
+  syncRackSize(rackId);
+  return locationFull(info.lastInsertRowid);
 });
 
-const updateRack = (id, { name, note = '' }) => {
-  db.prepare('UPDATE racks SET name = ?, note = ? WHERE id = ?').run(name, note, id);
+// Комірку з товаром або з коробками не видаляємо мовчки — краще явна помилка.
+const removeCell = db.transaction((locId) => {
+  const qty = db.prepare('SELECT COALESCE(SUM(qty), 0) AS q FROM stock WHERE location_id = ?').get(locId).q;
+  if (qty > 0) throw new Error('У комірці є товар. Спершу заберіть або перемістіть його.');
+  const boxes = db.prepare('SELECT COUNT(*) AS n FROM locations WHERE parent_id = ?').get(locId).n;
+  if (boxes > 0) throw new Error('У комірці є коробки. Спершу приберіть їх.');
+  const loc = db.prepare('SELECT rack_id FROM locations WHERE id = ?').get(locId);
+  db.prepare('DELETE FROM locations WHERE id = ?').run(locId);
+  if (loc?.rack_id) syncRackSize(loc.rack_id);
+  return { ok: true };
+});
+
+// Перетягування комірки в межах стелажа (редактор схеми).
+const moveCell = db.transaction((locId, row, col) => {
+  const loc = db.prepare("SELECT * FROM locations WHERE id = ? AND kind = 'cell'").get(locId);
+  if (!loc) throw new Error('Комірку не знайдено');
+  if (cellTaken(loc.rack_id, row, col)) throw new Error('Місце вже зайняте іншою коміркою');
+  db.prepare('UPDATE locations SET row_idx = ?, col_idx = ? WHERE id = ?').run(row, col, locId);
+  syncRackSize(loc.rack_id);
+  return locationFull(locId);
+});
+
+function syncRackSize(rackId) {
+  const b = rackBounds(rackId);
+  db.prepare('UPDATE racks SET rows = ?, cols = ? WHERE id = ?').run(Math.max(b.rows, 1), Math.max(b.cols, 1), rackId);
+}
+
+// Додати одразу ряд із n комірок — щоб не клікати кожну.
+const addCellRow = db.transaction((rackId, count, row = null) => {
+  const rack = getRack(rackId);
+  if (!rack) throw new Error('Стелаж не знайдено');
+  const b = rackBounds(rackId);
+  const r = row === null ? b.rows : row;
+  let added = 0;
+  for (let c = 0; c < count; c++) {
+    if (!cellTaken(rackId, r, c)) {
+      db.prepare(`
+        INSERT INTO locations(warehouse_id, rack_id, kind, row_idx, col_idx, label, barcode)
+        VALUES(?, ?, 'cell', ?, ?, ?, ?)
+      `).run(rack.warehouse_id, rackId, r, c, autoLabel(rack.name, r, c), newLocationBarcode());
+      added++;
+    }
+  }
+  syncRackSize(rackId);
+  return { added, rack: getRack(rackId) };
+});
+
+const updateRack = (id, { name, note = '', color = '' }) => {
+  db.prepare('UPDATE racks SET name = ?, note = ?, color = ? WHERE id = ?').run(name, note, color, id);
+  return getRack(id);
+};
+
+// Куди стелаж поставлено на плані складу і як розвернуто.
+const setRackPosition = (id, { pos_x, pos_y, orientation }) => {
+  db.prepare('UPDATE racks SET pos_x = ?, pos_y = ?, orientation = ? WHERE id = ?')
+    .run(Math.max(0, pos_x | 0), Math.max(0, pos_y | 0), orientation === 'v' ? 'v' : 'h', id);
   return getRack(id);
 };
 
 const deleteRack = (id) => db.prepare('DELETE FROM racks WHERE id = ?').run(id);
 
-// Повна сітка стелажа з підсумками по кожній комірці — для схеми на екрані.
+// Повна схема стелажа з підсумками по кожній комірці — для екрана й редактора.
 function rackGrid(rackId) {
   const rack = getRack(rackId);
   if (!rack) return null;
@@ -123,8 +198,35 @@ function rackGrid(rackId) {
      WHERE l.rack_id = ? AND l.kind = 'cell'
      ORDER BY l.row_idx, l.col_idx
   `).all(rackId);
-  return { rack, cells };
+  const b = rackBounds(rackId);
+  return { rack: { ...rack, rows: Math.max(b.rows, 1), cols: Math.max(b.cols, 1) }, cells };
 }
+
+// План складу: усі стелажі з їхніми координатами й габаритами в клітинках.
+function warehousePlan(warehouseId) {
+  const warehouse = getWarehouse(warehouseId);
+  if (!warehouse) return null;
+  const racks = listRacks(warehouseId).map((r) => {
+    const b = rackBounds(r.id);
+    const qty = db.prepare(`
+      SELECT COALESCE(SUM(s.qty), 0) AS q FROM stock s
+        JOIN locations l ON l.id = s.location_id
+       WHERE l.rack_id = ?
+    `).get(r.id).q;
+    return { ...r, cells_count: b.count, cell_rows: Math.max(b.rows, 1), cell_cols: Math.max(b.cols, 1), qty };
+  });
+  const zones = db.prepare(`
+    SELECT l.*, (SELECT COALESCE(SUM(s.qty), 0) FROM stock s WHERE s.location_id = l.id) AS qty
+      FROM locations l WHERE l.warehouse_id = ? AND l.kind = 'zone' ORDER BY l.label
+  `).all(warehouseId);
+  return { warehouse, racks, zones };
+}
+
+const updateWarehousePlan = (id, { plan_w, plan_h }) => {
+  db.prepare('UPDATE warehouses SET plan_w = ?, plan_h = ? WHERE id = ?')
+    .run(Math.min(Math.max(plan_w | 0, 4), 60), Math.min(Math.max(plan_h | 0, 4), 60), id);
+  return getWarehouse(id);
+};
 
 /* ------------------------------------------------------------- locations */
 
@@ -441,7 +543,9 @@ function dashboard() {
 module.exports = {
   colName,
   listWarehouses, createWarehouse, getWarehouse, updateWarehouse, deleteWarehouse,
-  listRacks, getRack, createRack, updateRack, resizeRack, deleteRack, rackGrid,
+  listRacks, getRack, createRack, updateRack, deleteRack, rackGrid, rackBounds,
+  addCell, addCellRow, removeCell, moveCell, setRackPosition,
+  warehousePlan, updateWarehousePlan,
   listLocations, createLocation, updateLocation, deleteLocation, locationFull, locationContents,
   searchParts, partFull, createPart, updatePart, deletePart, partPlacements,
   stockIn, stockOut, stockMove, stockAdjust, getQty, totalQty, listMovements,
