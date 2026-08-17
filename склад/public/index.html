@@ -8,22 +8,24 @@
 </head>
 <body>
 
-<header class="top no-print" id="topbar" hidden>
-  <div class="logo">INVENTA</div>
-  <nav>
-    <a href="#/scan">Сканувати</a>
-    <a href="#/products">Товари</a>
-    <a href="#/categories">Категорії</a>
-    <a href="#/warehouses">Склади</a>
-    <a href="#/labels">Наклейки</a>
-    <a href="#/history">Історія</a>
-    <a href="#/integrations">Інтеграції</a>
-    <a href="#/settings">Налаштування</a>
-  </nav>
-  <button class="ghost sm" id="logoutBtn">Вийти</button>
-</header>
+<div class="shell">
+  <aside class="side no-print" id="sidebar" hidden>
+    <div class="logo">INVENTA</div>
+    <nav>
+      <a href="#/scan"><span class="ico">⌗</span>Сканувати</a>
+      <a href="#/products"><span class="ico">▤</span>Товари</a>
+      <a href="#/categories"><span class="ico">☰</span>Категорії</a>
+      <a href="#/warehouses"><span class="ico">▦</span>Склади</a>
+      <a href="#/labels"><span class="ico">🖨</span>Наклейки</a>
+      <a href="#/history"><span class="ico">↻</span>Історія</a>
+      <a href="#/settings"><span class="ico">⚙</span>Налаштування</a>
+    </nav>
+    <button class="ghost sm" id="logoutBtn">Вийти</button>
+  </aside>
 
-<main id="app"></main>
+  <main id="app"></main>
+</div>
+
 <div id="toasts"></div>
 
 <script src="/vendor/jsbarcode.js"></script>

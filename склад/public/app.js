@@ -87,7 +87,7 @@ function applySettings(st) {
   root.dataset.theme = theme || 'dark';
   if (SETTINGS.accent) root.style.setProperty('--accent', SETTINGS.accent);
   if (SETTINGS.plan_cell) PLAN_CELL = Number(SETTINGS.plan_cell);
-  const logo = $('header.top .logo');
+  const logo = $('.side .logo');
   if (logo && SETTINGS.brand) logo.textContent = SETTINGS.brand;
   document.title = `${SETTINGS.brand || 'Inventa'} — складський облік`;
 }
@@ -105,11 +105,13 @@ async function viewSettings(seg) {
       <div class="subnav">
         <a href="#/settings/appearance" class="${tab === 'appearance' ? 'active' : ''}">Вигляд</a>
         <a href="#/settings/security" class="${tab === 'security' ? 'active' : ''}">Безпека</a>
+        <a href="#/settings/integrations" class="${tab === 'integrations' ? 'active' : ''}">Інтеграції</a>
       </div>
       <div id="settingsBody"></div>
     </div>`;
 
   if (tab === 'security') return renderSecurity($('#settingsBody'));
+  if (tab === 'integrations') return renderIntegrations($('#settingsBody'));
   renderAppearance($('#settingsBody'), st);
 }
 
@@ -235,7 +237,7 @@ async function renderSecurity(box) {
 /* ============================================================ вхід */
 
 function renderLogin() {
-  $('#topbar').hidden = true;
+  $('#sidebar').hidden = true;
   app.innerHTML = `
     <div class="card" style="max-width:380px;margin:12vh auto">
       <h1>${esc(SETTINGS?.brand || 'Inventa')}</h1>
@@ -250,7 +252,7 @@ function renderLogin() {
     e.preventDefault();
     try {
       await api('/login', { method: 'POST', body: { password: $('#pw').value } });
-      $('#topbar').hidden = false;
+      $('#sidebar').hidden = false;
       location.hash = '#/scan';
       route();
     } catch (err) { toast(err.message, 'err'); }
@@ -1821,12 +1823,12 @@ async function viewHistory(params) {
 
 /* ============================================================ інтеграції */
 
-async function viewIntegrations() {
+async function renderIntegrations(box) {
   const list = await api('/integrations');
   const origin = location.origin;
-  app.innerHTML = `
-    <div class="card">
-      <div class="row"><h1 class="grow">Інтеграції</h1>
+  box.innerHTML = `
+    <div class="card" style="background:transparent;border:0;padding:0">
+      <div class="row"><h2 class="grow">Інтеграції</h2>
         <button class="primary sm" id="add">＋ Підключити сервіс</button></div>
       <p class="muted small">Inventa — самостійний додаток. Будь-який магазин чи CRM під'єднується сюди
         через API-ключ і не має доступу ні до чого іншого. Ключ можна відкликати в один клік.</p>
@@ -1873,7 +1875,7 @@ curl -X POST -H "X-Api-Key: sk_..." -H "Content-Type: application/json" \\
 curl -H "X-Api-Key: sk_..." "${origin}/api/v1/locate?code=7700123456"</pre>
     </div>`;
 
-  $('#add').addEventListener('click', () => {
+  box.querySelector('#add').addEventListener('click', () => {
     const bg = modal(`
       <h2>Новий сервіс</h2>
       <form id="f">
@@ -1896,15 +1898,15 @@ curl -H "X-Api-Key: sk_..." "${origin}/api/v1/locate?code=7700123456"</pre>
     });
   });
 
-  app.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
+  box.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
     navigator.clipboard.writeText(b.dataset.copy).then(() => toast('Скопійовано', 'ok'));
   }));
-  app.querySelectorAll('[data-rotate]').forEach((b) => b.addEventListener('click', async () => {
+  box.querySelectorAll('[data-rotate]').forEach((b) => b.addEventListener('click', async () => {
     if (!confirm('Старий ключ перестане працювати. Продовжити?')) return;
     await api(`/integrations/${b.dataset.rotate}/rotate`, { method: 'POST' });
     toast('Новий ключ видано', 'ok'); route();
   }));
-  app.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+  box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
     if (!confirm('Видалити інтеграцію і всі її зв\'язки з товарами?')) return;
     await api(`/integrations/${b.dataset.del}`, { method: 'DELETE' });
     route();
@@ -1921,8 +1923,10 @@ async function route() {
   const params = new URLSearchParams(query || '');
   const seg = path.split('/').filter(Boolean);
 
-  document.querySelectorAll('header.top nav a').forEach((a) =>
-    a.classList.toggle('active', a.getAttribute('href') === '#/' + seg[0]));
+  // «Інтеграції» тепер живуть у налаштуваннях, тож підсвічуємо саме цей пункт.
+  const activeTop = seg[0] === 'integrations' ? 'settings' : seg[0];
+  document.querySelectorAll('.side nav a').forEach((a) =>
+    a.classList.toggle('active', a.getAttribute('href') === '#/' + activeTop));
 
   try {
     switch (seg[0]) {
@@ -1935,7 +1939,8 @@ async function route() {
       case 'rack': return viewRack(seg[1]);
       case 'labels': return viewLabels(params);
       case 'history': return viewHistory(params);
-      case 'integrations': return viewIntegrations();
+      // Стара адреса лишається робочою: просто ведемо в потрібний розділ налаштувань.
+      case 'integrations': location.hash = '#/settings/integrations'; return;
       case 'settings': return viewSettings(seg);
       default: location.hash = '#/scan';
     }
@@ -1956,7 +1961,7 @@ $('#logoutBtn').addEventListener('click', async () => {
   try { applySettings(await api('/public-settings')); } catch (e) { /* лишиться типовий вигляд */ }
   const { authed } = await api('/me');
   if (!authed) return renderLogin();
-  $('#topbar').hidden = false;
+  $('#sidebar').hidden = false;
   if (!location.hash) location.hash = '#/scan';
   route();
 })();
