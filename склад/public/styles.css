@@ -96,10 +96,13 @@ code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; 
   border-right: 1px solid var(--line);
 }
 .side .logo {
+  display: block;
   font-weight: 800; font-size: 20px; color: var(--accent);
   padding: 2px 10px 18px; letter-spacing: -.02em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
 }
+.side .logo:hover { text-decoration: none; filter: brightness(1.15); }
 .side nav { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; }
 .side nav a {
   display: flex; align-items: center; gap: 11px;
@@ -592,6 +595,8 @@ tbody tr:hover { background: var(--panel-2); }
 tr.row-selected { background: var(--accent-soft); }
 tr.row-selected:hover { background: var(--accent-soft); }
 
+/* Атрибут hidden не спрацьовує сам по собі, бо нижче задано display: flex. */
+.select-bar[hidden] { display: none; }
 .select-bar {
   position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;

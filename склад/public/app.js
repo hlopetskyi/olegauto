@@ -3,6 +3,9 @@
 /* ============================================================ утиліти */
 
 const $ = (sel, root = document) => root.querySelector(sel);
+
+// Головна сторінка додатка. Звідси починається робота: план складу.
+const HOME = '#/warehouses';
 const app = $('#app');
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -391,7 +394,7 @@ function renderLogin() {
       await api('/login', { method: 'POST', body });
       ME = await api('/me');
       $('#sidebar').hidden = false;
-      location.hash = '#/scan';
+      location.hash = HOME;
       route();
     } catch (err) { toast(err.message, 'err'); }
   });
@@ -2428,7 +2431,7 @@ async function route() {
   closeModal();
   // Вибір живе лише на сторінці товарів.
   if (!location.hash.startsWith('#/products')) { selectMode = false; selected.clear(); renderSelectBar(); }
-  const raw = location.hash.slice(1) || '/scan';
+  const raw = location.hash.slice(1) || HOME.slice(1);
   const [path, query] = raw.split('?');
   const params = new URLSearchParams(query || '');
   const seg = path.split('/').filter(Boolean);
@@ -2453,7 +2456,7 @@ async function route() {
       // Стара адреса лишається робочою: просто ведемо в потрібний розділ налаштувань.
       case 'integrations': location.hash = '#/settings/integrations'; return;
       case 'settings': return viewSettings(seg);
-      default: location.hash = '#/scan';
+      default: location.hash = HOME;
     }
   } catch (e) {
     app.innerHTML = `<div class="card"><h2>Помилка</h2><p class="muted">${esc(e.message)}</p></div>`;
@@ -2461,6 +2464,14 @@ async function route() {
 }
 
 window.addEventListener('hashchange', route);
+
+// Клік по назві — на головну з повним перезавантаженням: зручний спосіб
+// скинути стан, якщо щось підвисло на екрані.
+$('#logoLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  location.hash = HOME;
+  location.reload();
+});
 
 $('#logoutBtn').addEventListener('click', async () => {
   await api('/logout', { method: 'POST' });
@@ -2473,6 +2484,6 @@ $('#logoutBtn').addEventListener('click', async () => {
   ME = await api('/me');
   if (!ME.authed) return renderLogin();
   $('#sidebar').hidden = false;
-  if (!location.hash) location.hash = '#/scan';
+  if (!location.hash) location.hash = HOME;
   route();
 })();
