@@ -1988,7 +1988,7 @@ async function submitOrder() {
     city: _npSelectedCityLabel || document.getElementById('oCity').value,
     cityRef: _npSelectedCityRef || '',
     warehouse: warehouseLabel || '',
-    warehouseRef: warehouseEl?.value || '',
+    warehouseRef: document.getElementById('oWarehouse')?.value || '',
     delivery,
     comment: document.getElementById('oComment').value,
     items: cart,
@@ -2004,11 +2004,14 @@ async function submitOrder() {
     cart = [];
     saveCart();
     showOrderNotification(order.id);
-    gtag('event', 'conversion', {
-      'send_to': 'AW-18238999254/TMK6CKSh0MEcENaVhPlD',
-      'value': subtotal,
-      'currency': 'UAH'
-    });
+    // блокувальники реклами можуть прибрати gtag — це не має ламати оформлення
+    if (typeof gtag === 'function') {
+      gtag('event', 'conversion', {
+        'send_to': 'AW-18238999254/TMK6CKSh0MEcENaVhPlD',
+        'value': subtotal,
+        'currency': 'UAH'
+      });
+    }
     showModal(`
 <div class="modal-icon">🎉</div>
 <h2>Замовлення прийнято!</h2>
