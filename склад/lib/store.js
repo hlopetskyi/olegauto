@@ -882,9 +882,10 @@ const crypto2 = require('crypto');
 // Налаштування живуть у meta під префіксом set:, тож окрема таблиця не потрібна.
 const SETTINGS_DEFAULTS = {
   brand: 'Inventa',
-  theme: 'dark',          // dark | light | auto
-  accent: '#ffb020',
+  theme: 'light',         // light | dark | auto
+  accent: '#3d6df0',
   plan_cell: 34,          // розмір клітинки плану складу, px
+  products_view: 'grid',  // grid | list — як показувати список товарів
   session_days: 30,
 };
 

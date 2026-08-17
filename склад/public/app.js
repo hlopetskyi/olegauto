@@ -76,25 +76,58 @@ const renderAllBarcodes = (root = document) =>
 /* ====================================================== налаштування */
 
 let SETTINGS = null;
+let productsView = localStorage.getItem('inventa_products_view') || 'grid';
 let ME = { authed: false, user: null, can: { admin: false, stock: false, product_edit: false } };
 const can = (what) => !!ME.can?.[what];
 
 // Тема, акцент і назва — єдине місце, де вони застосовуються до сторінки.
+// Читабельність тексту на кнопці залежить від яскравості акценту:
+// на світло-жовтому потрібен темний напис, на синьому — білий.
+function inkFor(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+  if (!m) return '#ffffff';
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return L > 0.45 ? '#15202e' : '#ffffff';
+}
+
+const hexToRgb = (hex) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+  if (!m) return '61, 109, 240';
+  const n = parseInt(m[1], 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+};
+
 function applySettings(st) {
   SETTINGS = { ...(SETTINGS || {}), ...st };
   const root = document.documentElement;
   const theme = SETTINGS.theme === 'auto'
-    ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : SETTINGS.theme;
-  root.dataset.theme = theme || 'dark';
-  if (SETTINGS.accent) root.style.setProperty('--accent', SETTINGS.accent);
+  root.dataset.theme = theme || 'light';
+  if (SETTINGS.accent) {
+    root.style.setProperty('--accent', SETTINGS.accent);
+    root.style.setProperty('--accent-ink', inkFor(SETTINGS.accent));
+    const alpha = theme === 'dark' ? '.22' : '.12';
+    root.style.setProperty('--accent-soft', `rgba(${hexToRgb(SETTINGS.accent)}, ${alpha})`);
+  }
   if (SETTINGS.plan_cell) PLAN_CELL = Number(SETTINGS.plan_cell);
   const logo = $('.side .logo');
   if (logo && SETTINGS.brand) logo.textContent = SETTINGS.brand;
   document.title = `${SETTINGS.brand || 'Inventa'} — складський облік`;
 }
 
-const ACCENTS = ['#ffb020', '#2f81f7', '#2ea043', '#e05561', '#a06bf0', '#00b8a9'];
+// Заглушка замість фото — та сама іконка коробки, що й у меню.
+const NO_PHOTO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" '
+  + 'stroke-linecap="round" stroke-linejoin="round" style="width:34%;height:34%;opacity:.5">'
+  + '<path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"/>'
+  + '<path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>';
+
+const ACCENTS = ['#3d6df0', '#0e9f6e', '#7c5cff', '#f2762e', '#e0397a', '#0d9bb5'];
 
 async function viewSettings(seg) {
   // Меню цей пункт комірнику не показує, але адресу можна ввести руками —
@@ -201,7 +234,7 @@ async function renderUsers(box) {
 
   box.innerHTML = `
     <div class="row"><h2 class="grow">Користувачі</h2>
-      <button class="primary sm" id="addUser">＋ Додати</button></div>
+      <button class="primary sm" id="addUser"><span class="bi">＋</span>Додати</button></div>
 
     ${users.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Логін</th><th>Ім'я</th><th>Роль</th><th>Стан</th><th>Останній вхід</th><th></th></tr></thead>
@@ -285,14 +318,14 @@ function renderData(box) {
     <h2>Дані</h2>
     <p class="muted small">Вивантаження у CSV з роздільником «крапка з комою» — Excel відкриває такий файл одразу.</p>
     <div class="row">
-      <a href="/api/export/products.csv"><button>⭳ Товари із залишками</button></a>
-      <a href="/api/export/movements.csv"><button>⭳ Історія рухів</button></a>
-      <a href="/api/export/locations.csv"><button>⭳ Місця зберігання</button></a>
+      <a href="/api/export/products.csv"><button><span class="bi">↓</span>Товари із залишками</button></a>
+      <a href="/api/export/movements.csv"><button><span class="bi">↓</span>Історія рухів</button></a>
+      <a href="/api/export/locations.csv"><button><span class="bi">↓</span>Місця зберігання</button></a>
     </div>
 
     <h3 style="margin-top:18px">Завантаження</h3>
     <div class="row">
-      <a href="#/import"><button class="primary">⭱ Імпорт товарів із файлу</button></a>
+      <a href="#/import"><button class="primary"><span class="bi">↑</span>Імпорт товарів із файлу</button></a>
       <a href="/api/export/template.csv"><button class="ghost">Зразок файлу</button></a>
     </div>
 
@@ -416,7 +449,7 @@ function viewScan() {
         <input id="scanInput" autocomplete="off" placeholder="Код товару, місця або артикул" autofocus>
       </form>
       <div class="row" style="justify-content:center;margin-top:12px">
-        <button class="ghost sm" id="camBtn">📷 Камерою телефона</button>
+        <button class="ghost sm" id="camBtn">📷 Камерою телефона</button>
       </div>
       <div id="reader" hidden></div>
     </div>
@@ -520,7 +553,7 @@ function productCardHtml(p) {
         <button class="sm" data-act="out" data-product="${p.id}" data-loc="${pl.location_id}">Видати</button>
         <button class="sm" data-act="move" data-product="${p.id}" data-loc="${pl.location_id}">Перемістити</button>
         <button class="sm ghost" data-act="adjust" data-product="${p.id}" data-loc="${pl.location_id}">Перерахувати</button>
-        <a href="#/warehouse/${pl.warehouse_id}?hit=${pl.location_id}"><button class="sm ghost">🗺 Показати на плані складу</button></a>
+        <a href="#/warehouse/${pl.warehouse_id}?hit=${pl.location_id}"><button class="sm ghost">🗺 Показати на плані складу</button></a>
       </div>
     </div>`).join('')
     : '<p class="muted">Ще не розміщено на складі. Натисніть «Прийняти на склад».</p>';
@@ -559,11 +592,11 @@ function productCardHtml(p) {
       </div>`).join('')}</div>` : ''}
 
     <div class="row" style="margin-top:10px">
-      <button class="primary sm" data-act="in" data-product="${p.id}">＋ Прийняти на склад</button>
-      <label class="sm photo-add">📷 Додати фото
+      <button class="primary sm" data-act="in" data-product="${p.id}"><span class="bi">＋</span>Прийняти на склад</button>
+      <label class="sm photo-add">📷 Додати фото
         <input type="file" accept="image/*" data-photo-for="${p.id}" hidden multiple></label>
       <button class="sm" data-act="edit-product" data-product="${p.id}">Редагувати</button>
-      <a class="sm" href="#/labels?product=${p.id}"><button class="sm">🖨 Наклейка</button></a>
+      <a class="sm" href="#/labels?product=${p.id}"><button class="sm">🖨 Наклейка</button></a>
       <a class="sm" href="#/history?product=${p.id}"><button class="sm ghost">Історія</button></a>
     </div>
   </div>
@@ -619,9 +652,9 @@ function locationCardHtml(r) {
       <div style="text-align:center"><svg data-code="${esc(l.barcode)}" data-h="46"></svg></div>
     </div>
     <div class="row" style="margin-top:8px">
-      <button class="primary sm" data-act="in-here" data-loc="${l.id}">＋ Покласти сюди товар</button>
-      <button class="sm" data-act="add-box" data-loc="${l.id}" data-wh="${l.warehouse_id}">＋ Коробка всередині</button>
-      <a href="#/labels?loc=${l.id}"><button class="sm">🖨 Наклейка</button></a>
+      <button class="primary sm" data-act="in-here" data-loc="${l.id}"><span class="bi">＋</span>Покласти сюди товар</button>
+      <button class="sm" data-act="add-box" data-loc="${l.id}" data-wh="${l.warehouse_id}"><span class="bi">＋</span>Коробка всередині</button>
+      <a href="#/labels?loc=${l.id}"><button class="sm">🖨 Наклейка</button></a>
     </div>
   </div>
   ${r.boxes.length ? `<div class="card"><h2>Коробки тут</h2>
@@ -895,12 +928,16 @@ async function viewProducts(params) {
     <div class="card">
       <div class="row">
         <h1 class="grow">Товари</h1>
-        <a href="/api/export/products.csv"><button class="ghost">⭳ Експорт</button></a>
-        <a href="#/import"><button class="ghost">⭱ Імпорт</button></a>
-        <button class="primary" id="addProduct">＋ Новий товар</button>
+        <a href="/api/export/products.csv"><button class="ghost"><span class="bi">↓</span>Експорт</button></a>
+        <a href="#/import"><button class="ghost"><span class="bi">↑</span>Імпорт</button></a>
+        <button class="primary" id="addProduct"><span class="bi">＋</span>Новий товар</button>
       </div>
-      <input id="q" placeholder="Пошук: назва, артикул, OEM, модель" value="${esc(q)}" autofocus>
+      <input id="q" placeholder="Пошук: назва, артикул, штрих-код, поле категорії" value="${esc(q)}" autofocus>
       <div class="row" style="margin-top:8px">
+        <div class="viewswitch" id="viewswitch">
+          <button data-view="grid" class="${productsView === 'grid' ? 'active' : ''}"><span class="bi">▦</span>Плитки</button>
+          <button data-view="list" class="${productsView === 'list' ? 'active' : ''}"><span class="bi">☰</span>Список</button>
+        </div>
         <label class="field grow" style="margin:0"><span>Категорія</span>
           <select id="cat">
             <option value="">Усі категорії</option>
@@ -915,23 +952,47 @@ async function viewProducts(params) {
     </div>
     <div class="card"><div id="list" class="table-wrap">Завантаження…</div></div>`;
 
-  const load = async () => {
-    const low = $('#low').checked ? '1' : '';
-    const items = await api('/products' + qs({ q: $('#q').value, low, category: $('#cat').value, limit: 300 }));
-    $('#list').innerHTML = items.length ? `<table>
+  // Кількість на видноті: зелена — є, жовта — на межі мінімуму, червона — нуль.
+  const qtyBadge = (p) => (p.total_qty > 0
+    ? `<span class="badge ${p.min_qty > 0 && p.total_qty <= p.min_qty ? 'warn' : 'ok'}">${p.total_qty} ${esc(p.unit || 'шт')}</span>`
+    : '<span class="badge err">немає</span>');
+
+  const cardsHtml = (items) => `<div class="grid-products">${items.map((p) => `
+    <a class="pcard" href="#/product/${p.id}">
+      <div class="pimg">${p.photo
+        ? `<img src="/uploads/${esc(p.photo)}" alt="" loading="lazy">`
+        : NO_PHOTO}</div>
+      <div class="pbody">
+        <div class="pname">${esc(p.name)}</div>
+        <div class="pmeta">
+          ${qtyBadge(p)}
+          ${p.code ? `<span class="mono">${esc(p.code)}</span>` : ''}
+        </div>
+      </div>
+    </a>`).join('')}</div>`;
+
+  const tableHtml = (items) => `<div class="table-wrap"><table>
       <thead><tr><th></th><th>Назва</th><th>Категорія</th><th>Артикул</th><th>Залишок</th><th>Код</th></tr></thead>
       <tbody>${items.map((p) => `<tr>
         <td class="thumb-cell">${p.photo
           ? `<img class="thumb" src="/uploads/${esc(p.photo)}" alt="" loading="lazy">`
-          : '<span class="thumb thumb-empty">▤</span>'}</td>
+          : `<span class="thumb thumb-empty">${NO_PHOTO}</span>`}</td>
         <td><a href="#/product/${p.id}">${esc(p.name)}</a></td>
         <td class="small">${p.category_name ? `<span class="badge">${esc(p.category_name)}</span>` : ''}</td>
         <td class="mono small">${esc(p.code)}</td>
-        <td>${p.total_qty > 0
-            ? `<span class="badge ${p.min_qty > 0 && p.total_qty <= p.min_qty ? 'warn' : 'ok'}">${p.total_qty}</span>`
-            : '<span class="badge err">0</span>'}</td>
+        <td>${qtyBadge(p)}</td>
         <td class="mono small muted">${esc(p.barcode)}</td>
-      </tr>`).join('')}</tbody></table>` : '<p class="muted">Нічого не знайдено.</p>';
+      </tr>`).join('')}</tbody></table></div>`;
+
+  const load = async () => {
+    const low = $('#low').checked ? '1' : '';
+    const items = await api('/products' + qs({ q: $('#q').value, low, category: $('#cat').value, limit: 300 }));
+    if (!items.length) {
+      $('#list').innerHTML = `<p class="muted">Нічого не знайдено.
+        ${$('#q').value ? `<a href="#/products?new=${encodeURIComponent($('#q').value)}">Створити такий товар?</a>` : ''}</p>`;
+      return;
+    }
+    $('#list').innerHTML = productsView === 'grid' ? cardsHtml(items) : tableHtml(items);
   };
 
   let timer;
@@ -939,6 +1000,16 @@ async function viewProducts(params) {
   $('#low').addEventListener('change', load);
   $('#cat').addEventListener('change', load);
   $('#addProduct').addEventListener('click', () => dlgProduct(null));
+
+  // Вибраний вигляд запам'ятовуємо: комірник відкриває цей екран десятки разів на день.
+  $('#viewswitch').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-view]');
+    if (!b) return;
+    productsView = b.dataset.view;
+    localStorage.setItem('inventa_products_view', productsView);
+    $('#viewswitch').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+    load();
+  });
   await load();
   if (params.get('new')) dlgProduct({ name: params.get('new') });
 }
@@ -956,7 +1027,7 @@ async function viewImport() {
         Мінімальний залишок, Кількість, Місце, Примітка. Колонки, названі так само, як поля
         вибраної категорії, теж підхопляться. Excel зберігає з крапкою з комою — це нормально.</p>
       <div class="row">
-        <label class="sm photo-add">📂 Вибрати файл<input type="file" id="file" accept=".csv,text/csv,text/plain" hidden></label>
+        <label class="sm photo-add">📂 Вибрати файл<input type="file" id="file" accept=".csv,text/csv,text/plain" hidden></label>
         <a href="/api/export/template.csv"><button class="sm ghost">Завантажити зразок</button></a>
         <label class="field grow" style="margin:0"><span>Категорія за замовчуванням</span>
           <select id="cat">${categoryOptions(cats, null, '— без категорії —')}</select></label>
@@ -1060,11 +1131,11 @@ async function viewCategories() {
     <div class="card">
       <div class="row">
         <h1 class="grow">Категорії товарів</h1>
-        <button class="primary" id="add">＋ Категорія</button>
+        <button class="primary" id="add"><span class="bi">＋</span>Категорія</button>
       </div>
       <p class="muted small">Категорія визначає не лише «що це за товар», а й <b>які поля буде заповнено
         при створенні товару</b>. Для автозапчастин це OEM-номер і модель авто, для продуктів —
-        термін придатності й партія. Натисніть <b>⚙ Поля товару</b> в потрібній категорії.
+        термін придатності й партія. Натисніть <b>⚙ Поля товару</b> в потрібній категорії.
         Підкатегорії успадковують поля батьківської.</p>
     </div>
     <div class="card">
@@ -1074,15 +1145,15 @@ async function viewCategories() {
           <div class="row">
             <div class="grow"><h3><a href="#/products?category=${r.id}">${esc(r.name)}</a>
               <span class="badge">${r.products_count} товарів</span></h3></div>
-            <button class="sm" data-fields="${r.id}">⚙ Поля товару</button>
-            <button class="sm ghost" data-add-child="${r.id}">＋ підкатегорія</button>
+            <button class="sm" data-fields="${r.id}">⚙ Поля товару</button>
+            <button class="sm ghost" data-add-child="${r.id}"><span class="bi">＋</span>підкатегорія</button>
             <button class="sm ghost" data-edit="${r.id}">Змінити</button>
           </div>
           ${kids.length ? `<div class="table-wrap"><table><tbody>${kids.map((k) => `<tr>
             <td>└ <a href="#/products?category=${k.id}">${esc(k.name)}</a></td>
             <td><span class="badge">${k.products_count}</span></td>
             <td class="nowrap">
-              <button class="sm" data-fields="${k.id}">⚙ Поля</button>
+              <button class="sm" data-fields="${k.id}">⚙ Поля</button>
               <button class="sm ghost" data-edit="${k.id}">Змінити</button>
             </td>
           </tr>`).join('')}</tbody></table></div>` : ''}
@@ -1128,7 +1199,7 @@ async function dlgFields(categoryId, cats) {
     <div id="fieldList"></div>
 
     <div class="row" style="margin-top:12px">
-      <button class="primary sm" id="addField">＋ Додати поле</button>
+      <button class="primary sm" id="addField"><span class="bi">＋</span>Додати поле</button>
       <select id="preset" class="grow">
         <option value="">Готовий набір полів…</option>
         ${presets.map((p) => `<option value="${p.key}">${esc(p.name)}: ${esc(p.fields.join(', '))}</option>`).join('')}
@@ -1402,7 +1473,7 @@ async function viewWarehouses() {
       </div>
     </div>
     <div class="card">
-      <div class="row"><h2 class="grow">Склади</h2><button class="primary sm" id="addWh">＋ Склад</button></div>
+      <div class="row"><h2 class="grow">Склади</h2><button class="primary sm" id="addWh"><span class="bi">＋</span>Склад</button></div>
       ${whs.length ? whs.map((w) => `
         <div class="card" style="background:var(--panel-2)">
           <div class="row">
@@ -1487,8 +1558,8 @@ async function viewWarehouse(id, params = new URLSearchParams()) {
       <div class="row">
         <div class="grow"><h1>${esc(wh.name)}</h1>
           <div class="muted small">${esc(wh.address || '')}</div></div>
-        <button class="primary sm" id="addRack">＋ Стелаж</button>
-        <button class="sm" id="addZone">＋ Вільне місце</button>
+        <button class="primary sm" id="addRack"><span class="bi">＋</span>Стелаж</button>
+        <button class="sm" id="addZone"><span class="bi">＋</span>Вільне місце</button>
         <button class="sm ghost" id="planSize">Розмір плану</button>
       </div>
     </div>
@@ -1935,7 +2006,7 @@ async function viewRack(rackId) {
         <button class="${editingRack ? 'primary' : ''} sm" id="editToggle">
           ${editingRack ? '✓ Готово' : '✎ Редагувати схему'}</button>
         <button class="sm ghost" id="rotate">↻ ${rack.orientation === 'v' ? 'Покласти горизонтально' : 'Поставити вертикально'}</button>
-        <a href="#/labels?rack=${rack.id}"><button class="sm">🖨 Наклейки</button></a>
+        <a href="#/labels?rack=${rack.id}"><button class="sm">🖨 Наклейки</button></a>
         <button class="sm ghost" id="rackSettings">Налаштування</button>
       </div>
     </div>
@@ -1947,7 +2018,7 @@ async function viewRack(rackId) {
     </div>
     <div class="card">
       <div class="row">
-        <button class="sm" id="addRow">＋ Додати ряд знизу</button>
+        <button class="sm" id="addRow"><span class="bi">＋</span>Додати ряд знизу</button>
         <input type="number" id="rowCount" value="${Math.max(maxC, 1)}" min="1" max="60" style="width:90px">
         <span class="muted small">комірок у ряду</span>
       </div>
@@ -2080,7 +2151,7 @@ async function viewLabels(params) {
             <option value="a4">Аркуш A4 — 3 колонки</option>
             <option value="thermal">Термопринтер 58×40 мм</option>
           </select></label>
-        <button class="primary" id="printBtn">🖨 Друк</button>
+        <button class="primary" id="printBtn">🖨 Друк</button>
       </div>
       <label class="field"><span>Додати вручну (пошук по товарах)</span>
         <select id="pick"><option value="">— вибрати —</option>
@@ -2133,7 +2204,7 @@ async function viewHistory(params) {
   app.innerHTML = `
     <div class="card">
       <div class="row"><h1 class="grow">Історія рухів${productId ? ' (один товар)' : ''}</h1>
-        <a href="/api/export/movements.csv"><button class="ghost sm">⭳ Експорт</button></a></div>
+        <a href="/api/export/movements.csv"><button class="ghost sm"><span class="bi">↓</span>Експорт</button></a></div>
       ${rows.length ? `<div class="table-wrap"><table>
         <thead><tr><th>Коли</th><th>Що</th><th>Товар</th><th>Звідки</th><th>Куди</th><th>К-сть</th><th>Хто</th><th>Коментар</th></tr></thead>
         <tbody>${rows.map((m) => `<tr>
@@ -2157,7 +2228,7 @@ async function renderIntegrations(box) {
   box.innerHTML = `
     <div class="card" style="background:transparent;border:0;padding:0">
       <div class="row"><h2 class="grow">Інтеграції</h2>
-        <button class="primary sm" id="add">＋ Підключити сервіс</button></div>
+        <button class="primary sm" id="add"><span class="bi">＋</span>Підключити сервіс</button></div>
       <p class="muted small">Inventa — самостійний додаток. Будь-який магазин чи CRM під'єднується сюди
         через API-ключ і не має доступу ні до чого іншого. Ключ можна відкликати в один клік.</p>
       ${list.length ? list.map((i) => `
