@@ -2021,11 +2021,13 @@ function dlgRack(r, warehouseId) {
           <option value="empty">Порожній — намалюю схему сам</option>
         </select></label>
       <label class="field" id="wrapCount"><span>Скільки ящиків (комірок) у ряд</span>
-        <input type="number" id="count" min="1" max="60" value="8"></label>
+        <input type="number" id="count" min="0" max="60" value="8"></label>
       <div class="row" id="wrapGrid" hidden>
-        <label class="field grow"><span>Полиць (рядів)</span><input type="number" id="rows" min="1" max="30" value="3"></label>
-        <label class="field grow"><span>Секцій (колонок)</span><input type="number" id="cols" min="1" max="30" value="5"></label>
-      </div>` : ''}
+        <label class="field grow"><span>Полиць (рядів)</span><input type="number" id="rows" min="0" max="30" value="3"></label>
+        <label class="field grow"><span>Секцій (колонок)</span><input type="number" id="cols" min="0" max="30" value="5"></label>
+      </div>
+      <p class="small muted">Можна поставити 0 — стелаж створиться порожнім, комірки додасте
+        потім у його схемі.</p>` : ''}
       <label class="field"><span>Примітка</span><input id="note" value="${esc(r?.note ?? '')}"></label>
       <p class="small muted">Це лише стартова заготовка. Далі в схемі стелажа комірки можна додавати,
         прибирати й перетягувати поштучно — рівно під ваші ящики.</p>
@@ -2049,12 +2051,17 @@ function dlgRack(r, warehouseId) {
         await api(`/racks/${r.id}`, { method: 'PUT', body: { name, note, color: r.color || '' } });
         closeModal(); route();
       } else {
+        // Читаємо саме число: `|| 1` перетворював би нуль на одиницю.
+        const num = (id) => {
+          const v = Number(bg.querySelector('#' + id).value);
+          return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0;
+        };
         const created = await api('/racks', { method: 'POST', body: {
           warehouse_id: Number(warehouseId), name, note,
           mode: mode.value,
-          count: Number(bg.querySelector('#count').value) || 1,
-          rows: Number(bg.querySelector('#rows').value) || 1,
-          cols: Number(bg.querySelector('#cols').value) || 1,
+          count: num('count'),
+          rows: num('rows'),
+          cols: num('cols'),
         } });
         closeModal();
         location.hash = `#/rack/${created.id}`;

@@ -58,6 +58,7 @@ const getRack = (id) => db.prepare('SELECT * FROM racks WHERE id = ?').get(id);
  *   mode 'strip' — один довгий ряд із `count` комірок (типовий стелаж із ящиками);
  *   mode 'grid'  — прямокутник rows × cols;
  *   mode 'empty' — жодної комірки, малюєте самі в редакторі.
+ * Нуль у count/rows/cols дає той самий порожній стелаж, що й режим 'empty'.
  * Після створення комірки можна додавати, прибирати й перетягувати поштучно.
  */
 const createRack = db.transaction((opts) => {
@@ -86,10 +87,11 @@ const createRack = db.transaction((opts) => {
   `);
   const put = (r, c) => ins.run(warehouse_id, rackId, r, c, autoLabel(name, r, c), newLocationBarcode());
 
+  // Нуль — не помилка: так створюють порожній стелаж, щоб намалювати схему руками.
   if (mode === 'strip') {
-    for (let c = 0; c < Math.max(1, count); c++) put(0, c);
+    for (let c = 0; c < Math.max(0, count); c++) put(0, c);
   } else if (mode === 'grid') {
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) put(r, c);
+    for (let r = 0; r < Math.max(0, rows); r++) for (let c = 0; c < Math.max(0, cols); c++) put(r, c);
   }
   syncRackSize(rackId);
   return getRack(rackId);
