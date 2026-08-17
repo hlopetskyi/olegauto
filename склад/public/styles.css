@@ -345,3 +345,16 @@ tbody tr:hover { background: var(--panel-2); }
   border-radius: 8px; padding: 4px 9px; font-size: 13px;
 }
 .attr em { color: var(--muted); font-style: normal; margin-right: 6px; font-size: 12px; }
+
+/* Прев'ю місця, куди стане стелаж під час перетягування. */
+.plan-ghost {
+  border: 2px dashed var(--accent);
+  background: rgba(255,176,32,.14);
+  border-radius: 8px;
+  pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--accent);
+}
+.plan-ghost.busy {
+  border-color: var(--err); background: rgba(248,81,73,.16); color: var(--err);
+}

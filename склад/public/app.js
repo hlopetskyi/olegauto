@@ -1010,7 +1010,8 @@ async function viewWarehouse(id, params = new URLSearchParams()) {
     <div class="card">
       <div class="row">
         <h2 class="grow">План складу</h2>
-        <span class="muted small" id="planHint">Перетягніть стелаж мишею або торкніться його й потім вкажіть нове місце.</span>
+        <span class="muted small" id="planHint">Тягніть стелаж за смужку з назвою — рамка показує, куди він стане.
+          На телефоні: довге натискання на стелаж, потім тик у потрібне місце.</span>
       </div>
       <div class="plan-wrap"><div class="plan" id="plan"></div></div>
     </div>
@@ -1030,7 +1031,7 @@ function drawPlan(plan, hit = null) {
   const W = wh.plan_w || 24, H = wh.plan_h || 14;
   const el = $('#plan');
   if (!el) return;
-  const cellPx = 34;
+  const cellPx = PLAN_CELL;
   el.style.setProperty('--cell', cellPx + 'px');
   el.style.gridTemplateColumns = `repeat(${W}, ${cellPx}px)`;
   el.style.gridTemplateRows = `repeat(${H}, ${cellPx}px)`;
@@ -1083,15 +1084,47 @@ function drawPlan(plan, hit = null) {
     nameEl.addEventListener('dragstart', (e) => {
       planPlacing = rid;
       e.dataTransfer.setData('text/plain', String(rid));
+      e.dataTransfer.effectAllowed = 'move';
+      // Запам'ятовуємо, за яку саме клітинку стелажа взялись, щоб він не стрибав
+      // лівим верхнім кутом під курсор.
+      const at = planCellAt(e.clientX, e.clientY);
+      const rr = window.__plan.racks.find((x) => x.id === rid);
+      grabOffset = at ? { x: at.x - (rr.pos_x || 0), y: at.y - (rr.pos_y || 0) } : { x: 0, y: 0 };
       el.classList.add('placing');
     });
-    nameEl.addEventListener('dragend', () => { planPlacing = null; el.classList.remove('placing'); });
+    nameEl.addEventListener('dragend', () => {
+      planPlacing = null; grabOffset = { x: 0, y: 0 };
+      el.classList.remove('placing'); clearGhost();
+    });
   });
 
-  el.querySelectorAll('.slot').forEach((s) => {
-    s.addEventListener('dragover', (e) => e.preventDefault());
-    s.addEventListener('drop', (e) => { e.preventDefault(); placeRack(Number(s.dataset.x), Number(s.dataset.y)); });
-    s.addEventListener('click', () => { if (planPlacing) placeRack(Number(s.dataset.x), Number(s.dataset.y)); });
+  // Перетягування слухаємо на всій сітці, а не на окремих клітинках підкладки:
+  // клітинки перекриті блоками стелажів і подій не отримують.
+  el.addEventListener('dragover', (e) => {
+    if (!planPlacing) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const at = planCellAt(e.clientX, e.clientY);
+    if (!at) return;
+    const rack = window.__plan.racks.find((r) => r.id === planPlacing);
+    const pos = clampToPlan(window.__plan, rack, at.x - grabOffset.x, at.y - grabOffset.y);
+    showGhost(window.__plan, rack, pos.x, pos.y);
+  });
+
+  el.addEventListener('dragleave', (e) => { if (e.target === el) clearGhost(); });
+
+  el.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const at = planCellAt(e.clientX, e.clientY);
+    clearGhost();
+    if (at) placeRack(at.x - grabOffset.x, at.y - grabOffset.y);
+  });
+
+  // Режим «тицьнув і поставив» для телефона: тут курсор вказує лівий верхній кут.
+  el.addEventListener('click', (e) => {
+    if (!planPlacing) return;
+    const at = planCellAt(e.clientX, e.clientY);
+    if (at) placeRack(at.x, at.y);
   });
 
   el.querySelectorAll('[data-zone]').forEach((z) =>
@@ -1107,6 +1140,34 @@ function startPlacing(rackId) {
   $('#planHint').textContent = 'Тепер натисніть на плані місце, куди поставити стелаж.';
 }
 
+const PLAN_CELL = 34;
+
+// Куди саме на сітці вказує курсор. Рахуємо математикою, а не пошуком елемента
+// під курсором: підкладку сітки перекривають самі блоки стелажів.
+function planCellAt(clientX, clientY) {
+  const el = $('#plan');
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  const st = getComputedStyle(el);
+  const gap = parseFloat(st.gap) || 0;
+  const step = PLAN_CELL + gap;
+  return {
+    x: Math.floor((clientX - rect.left - parseFloat(st.paddingLeft)) / step),
+    y: Math.floor((clientY - rect.top - parseFloat(st.paddingTop)) / step),
+  };
+}
+
+// Тримаємо стелаж у межах плану: у край сітки він має ставати впритул.
+function clampToPlan(plan, rack, x, y) {
+  const sp = rackSpan(rack);
+  const W = plan.warehouse.plan_w || 24;
+  const H = plan.warehouse.plan_h || 14;
+  return {
+    x: Math.max(0, Math.min(x, W - sp.w)),
+    y: Math.max(0, Math.min(y, H - sp.h)),
+  };
+}
+
 // Два стелажі не можуть стояти на одному місці — інакше блоки на плані
 // перекривають один одного і схема перестає відповідати дійсності.
 function rackCollision(plan, rack, x, y) {
@@ -1119,15 +1180,17 @@ function rackCollision(plan, rack, x, y) {
   });
 }
 
-async function placeRack(x, y) {
+async function placeRack(rawX, rawY) {
   const rid = planPlacing;
   if (!rid) return;
   planPlacing = null;
   const plan = window.__plan;
   const r = plan.racks.find((rr) => rr.id === rid);
+  const { x, y } = clampToPlan(plan, r, rawX, rawY);
   const clash = rackCollision(plan, r, x, y);
   if (clash) {
     $('#plan').classList.remove('placing');
+    clearGhost();
     return toast(`Тут уже стоїть «${clash.name}». Виберіть вільне місце.`, 'err');
   }
   try {
@@ -1135,6 +1198,32 @@ async function placeRack(x, y) {
     r.pos_x = x; r.pos_y = y;
     drawPlan(plan);
   } catch (e) { toast(e.message, 'err'); }
+}
+
+/* --------------------------------- прев'ю місця під час перетягування */
+
+let grabOffset = { x: 0, y: 0 };
+
+function clearGhost() {
+  document.querySelectorAll('.plan-ghost').forEach((g) => g.remove());
+}
+
+// Показує рамку рівно там, куди стелаж стане, якщо відпустити зараз.
+function showGhost(plan, rack, x, y) {
+  const el = $('#plan');
+  if (!el) return;
+  const sp = rackSpan(rack);
+  let ghost = el.querySelector('.plan-ghost');
+  if (!ghost) {
+    ghost = document.createElement('div');
+    ghost.className = 'plan-ghost';
+    el.appendChild(ghost);
+  }
+  const free = !rackCollision(plan, rack, x, y);
+  ghost.classList.toggle('busy', !free);
+  ghost.style.gridColumn = `${x + 1}/span ${sp.w}`;
+  ghost.style.gridRow = `${y + 1}/span ${sp.h}`;
+  ghost.textContent = free ? '' : 'зайнято';
 }
 
 /* ------------------------------------------ підказка над коміркою */
