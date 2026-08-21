@@ -226,6 +226,20 @@ app.get('/api/products', (req, res) => {
     products = products.slice(offset, offset + limit);
   }
 
+  // view=admin — полегшений список для таблиці адмінки: без масиву фото та
+  // інших важких полів. На 15k товарів це ~4 МБ менше трафіку на кожне
+  // відкриття панелі; повний товар віддає GET /api/products/:id.
+  if (req.query.view === 'admin') {
+    products = products.map(p => ({
+      id: p.id, name: p.name, article: p.article, oem: p.oem,
+      brand: p.brand, model: p.model, compatibility: p.compatibility,
+      category: p.category, condition: p.condition,
+      price: p.price, priceText: p.priceText, stock: p.stock,
+      image: p.image, imgCount: (p.images && p.images.length) || (p.image ? 1 : 0),
+      createdAt: p.createdAt
+    }));
+  }
+
   res.json(products);
 });
 
